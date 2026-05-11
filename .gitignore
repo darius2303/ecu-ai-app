@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+venv/
+env/
+
+# Local IDE/editor state
+.idea/
+.vscode/
+*.iml
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Backend generated outputs
+backend/generated/
+
+# Flutter/Dart
+frontend/.dart_tool/
+frontend/.flutter-plugins
+frontend/.flutter-plugins-dependencies
+frontend/build/
+frontend/.codex-run/
+
+# Platform generated local files
+frontend/android/local.properties
+frontend/ios/Flutter/Generated.xcconfig
+frontend/ios/Flutter/flutter_export_environment.sh
+frontend/macos/Flutter/ephemeral/
+frontend/windows/flutter/ephemeral/
+frontend/linux/flutter/ephemeral/
+
+# OS files
+Thumbs.db
+.DS_Store
