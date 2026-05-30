@@ -79,6 +79,8 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  static const double _mobileBreakpoint = 720;
+
   final api = ApiService();
 
   final rpmController = TextEditingController();
@@ -105,6 +107,7 @@ class _HomePageState extends State<HomePage> {
   Map<String, dynamic>? fuelMapResult;
   Uint8List? heatmapBytes;
   String? savedPdfPath;
+  int mobileTabIndex = 0;
 
   Map<String, dynamic> buildInputData() {
     return {
@@ -123,6 +126,8 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> analyzeData() async {
     FocusScope.of(context).unfocus();
+    final showResultsAfterAnalyze =
+        MediaQuery.sizeOf(context).width < _mobileBreakpoint;
 
     setState(() {
       loadingAnalyze = true;
@@ -137,6 +142,9 @@ class _HomePageState extends State<HomePage> {
         potentialClass = result['potential_class']?.toString();
         estimatedHpAfterStage1 = (result['estimated_hp_after_stage1'] as num?)
             ?.toDouble();
+        if (showResultsAfterAnalyze) {
+          mobileTabIndex = 1;
+        }
       });
     } catch (e) {
       setState(() {
@@ -151,6 +159,8 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> generateFuelMap() async {
     FocusScope.of(context).unfocus();
+    final showOutputAfterGenerate =
+        MediaQuery.sizeOf(context).width < _mobileBreakpoint;
 
     setState(() {
       loadingFuelMap = true;
@@ -165,6 +175,9 @@ class _HomePageState extends State<HomePage> {
         stage1GainPercent ??= (result['stage1_gain_percent'] as num?)
             ?.toDouble();
         potentialClass ??= result['potential_class']?.toString();
+        if (showOutputAfterGenerate) {
+          mobileTabIndex = 2;
+        }
       });
 
       if (!mounted) return;
@@ -685,10 +698,200 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  Widget buildMobileStatusStrip() {
+    final gainValue = stage1GainPercent == null
+        ? '--'
+        : '${stage1GainPercent!.toStringAsFixed(1)}%';
+    final hpValue = estimatedHpAfterStage1 == null
+        ? '--'
+        : estimatedHpAfterStage1!.toStringAsFixed(0);
+    final mapValue = fuelMapResult == null ? 'Pending' : 'Ready';
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          _MobileStatChip(
+            icon: Icons.trending_up_rounded,
+            label: 'Gain',
+            value: gainValue,
+          ),
+          const SizedBox(width: 10),
+          _MobileStatChip(
+            icon: Icons.bolt_rounded,
+            label: 'Stage 1 HP',
+            value: hpValue,
+          ),
+          const SizedBox(width: 10),
+          _MobileStatChip(
+            icon: Icons.table_chart_rounded,
+            label: 'Fuel map',
+            value: mapValue,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget buildMobileTabContent(bool busy) {
+    switch (mobileTabIndex) {
+      case 1:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            buildResultCard(),
+            if (fuelMapResult != null) ...[
+              const SizedBox(height: 14),
+              buildFuelMapPreviewCard(),
+            ],
+          ],
+        );
+      case 2:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            buildActions(),
+            if (fuelMapResult != null) ...[
+              const SizedBox(height: 14),
+              buildFuelMapPreviewCard(),
+            ],
+          ],
+        );
+      default:
+        return buildInputForm(busy);
+    }
+  }
+
+  Widget buildMobileScaffold(bool busy) {
+    return Scaffold(
+      body: CustomScrollView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        slivers: [
+          SliverAppBar(
+            pinned: true,
+            expandedHeight: 178,
+            backgroundColor: const Color(0xFF0F172A),
+            foregroundColor: Colors.white,
+            title: const Text(
+              'ECU AI',
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
+            flexibleSpace: FlexibleSpaceBar(
+              background: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Color(0xFF0F172A), Color(0xFF2563EB)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                ),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    if (constraints.maxHeight < 158) {
+                      return const SizedBox.shrink();
+                    }
+
+                    return SafeArea(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(18, 58, 18, 14),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            const Expanded(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Stage 1 estimator',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                  SizedBox(height: 6),
+                                  Text(
+                                    'Analiza ECU, fuel map si raport PDF.',
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: Colors.white70,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            const Icon(
+                              Icons.memory_rounded,
+                              size: 44,
+                              color: Colors.white30,
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 14),
+              child: buildMobileStatusStrip(),
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 24),
+              child: buildMobileTabContent(busy),
+            ),
+          ),
+        ],
+      ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: mobileTabIndex,
+        onDestinationSelected: (index) {
+          setState(() {
+            mobileTabIndex = index;
+          });
+        },
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.tune_rounded),
+            selectedIcon: Icon(Icons.tune),
+            label: 'Date',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.auto_graph_rounded),
+            selectedIcon: Icon(Icons.auto_graph),
+            label: 'Rezultat',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.file_download_done_rounded),
+            selectedIcon: Icon(Icons.file_download_done),
+            label: 'Output',
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final busy =
         loadingAnalyze || loadingFuelMap || loadingHeatmap || loadingReport;
+    final isMobile = MediaQuery.sizeOf(context).width < _mobileBreakpoint;
+
+    if (isMobile) {
+      return buildMobileScaffold(busy);
+    }
 
     return Scaffold(
       body: CustomScrollView(
@@ -810,6 +1013,86 @@ class _IntroBand extends StatelessWidget {
           const _StatusPill(
             icon: Icons.api_rounded,
             label: 'API local: 127.0.0.1:8000',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MobileStatChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+
+  const _MobileStatChip({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 136,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0D0F172A),
+            blurRadius: 16,
+            offset: Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: Theme.of(
+                context,
+              ).colorScheme.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              icon,
+              size: 19,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF0F172A),
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 1),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF64748B),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
