@@ -15,9 +15,9 @@ void main() {
   testWidgets('ECU app renders the main screen', (WidgetTester tester) async {
     await tester.pumpWidget(const EcuAiApp());
 
-    expect(find.text('ECU AI App'), findsOneWidget);
-    expect(find.text('Stage 1 estimator'), findsOneWidget);
-    expect(find.text('Analyze'), findsOneWidget);
+    expect(find.text('ECU Calibration'), findsOneWidget);
+    expect(find.text('Calibration analyzer'), findsOneWidget);
+    expect(find.text('Analyze calibration'), findsOneWidget);
   });
 
   testWidgets('ECU app renders the mobile navigation', (

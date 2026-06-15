@@ -4,6 +4,8 @@ from pathlib import Path
 import joblib
 import pandas as pd
 
+from app.services.map_utils import derive_features_from_map, ensure_calibration_map
+
 # Calea către modelul antrenat
 MODEL_PATH = Path(__file__).resolve().parents[2] / "ml" / "artifacts" / "stage1_model.joblib"
 
@@ -34,13 +36,52 @@ def analyze_ecu_data(data):
     Modelul prezice stage1_gain_percent (câștig relativ).
     """
     model = _load_model()
+    derived_features = None
+    calibration_map = ensure_calibration_map(data)
+
+    if calibration_map is not None:
+        derived_features = derive_features_from_map(
+            calibration_map=calibration_map,
+            fuel_type=data.fuel_type,
+            is_turbo=data.is_turbo,
+        )
+
+    rpm = data.rpm if data.rpm is not None else (derived_features or {}).get("rpm")
+    boost_pressure = (
+        data.boost_pressure
+        if data.boost_pressure is not None
+        else (derived_features or {}).get("boost_pressure")
+    )
+    injection_quantity = (
+        data.injection_quantity
+        if data.injection_quantity is not None
+        else (derived_features or {}).get("injection_quantity")
+    )
+    afr = data.afr if data.afr is not None else (derived_features or {}).get("afr")
+
+    missing = [
+        name
+        for name, value in {
+            "rpm": rpm,
+            "boost_pressure": boost_pressure,
+            "injection_quantity": injection_quantity,
+            "afr": afr,
+        }.items()
+        if value is None
+    ]
+    if missing:
+        raise ValueError(
+            "Lipsesc valori pentru analiza: "
+            + ", ".join(missing)
+            + ". Completeaza campurile manual sau insereaza o harta WinOLS."
+        )
 
     # pipeline-ul a fost antrenat pe aceste coloane
     row = {
-        "rpm": float(data.rpm),
-        "boost_pressure": float(data.boost_pressure),
-        "injection_quantity": float(data.injection_quantity),
-        "afr": float(data.afr),
+        "rpm": float(rpm),
+        "boost_pressure": float(boost_pressure),
+        "injection_quantity": float(injection_quantity),
+        "afr": float(afr),
         "engine_displacement": float(data.engine_displacement),
         "fuel_type": data.fuel_type,
         "is_turbo": int(bool(data.is_turbo)),
@@ -57,6 +98,7 @@ def analyze_ecu_data(data):
         "stage1_gain_percent": round(gain, 2),
         "potential_class": _potential_class(gain),
         "estimated_hp_after_stage1": None,
+        "derived_features": derived_features,
     }
 
     if data.stock_hp is not None:

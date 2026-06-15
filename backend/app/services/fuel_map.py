@@ -3,6 +3,25 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from app.services.map_utils import ensure_calibration_map
+
+
+def dataframe_from_calibration_map(data) -> pd.DataFrame | None:
+    calibration_map = ensure_calibration_map(data)
+    if calibration_map is None:
+        return None
+    if calibration_map.get("map_type") != "fuel":
+        return None
+
+    df = pd.DataFrame(
+        calibration_map["values"],
+        index=[int(x) if float(x).is_integer() else round(float(x), 2) for x in calibration_map["rpm_axis"]],
+        columns=[round(float(x), 2) for x in calibration_map["load_axis"]],
+    )
+    df.index.name = "RPM"
+    df.columns.name = "Load"
+    return df
+
 
 def generate_fuel_map(
     rpm: float,

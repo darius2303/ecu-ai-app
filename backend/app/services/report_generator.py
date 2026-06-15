@@ -120,16 +120,25 @@ def generate_stage1_report(
     _draw_section_title(c, "Input Data", margin_x, y)
     y -= 22
 
+    derived = analysis.get("derived_features") or {}
+
     input_labels = {
-        "RPM": input_data.get("rpm"),
-        "Boost Pressure": input_data.get("boost_pressure"),
-        "Injection Quantity": input_data.get("injection_quantity"),
-        "AFR": input_data.get("afr"),
+        "RPM": input_data.get("rpm") or derived.get("rpm"),
+        "Boost Pressure": input_data.get("boost_pressure") or derived.get("boost_pressure"),
+        "Injection Quantity": input_data.get("injection_quantity") or derived.get("injection_quantity"),
+        "AFR": input_data.get("afr") or derived.get("afr"),
         "Engine Displacement (L)": input_data.get("engine_displacement"),
         "Fuel Type": input_data.get("fuel_type"),
         "Turbo": input_data.get("is_turbo"),
         "Stock HP": input_data.get("stock_hp"),
     }
+
+    if derived:
+        input_labels.update({
+            "Calibration Map": f"{derived.get('rows')}x{derived.get('columns')} {derived.get('map_type')}",
+            "Map Value Range": f"{derived.get('min_value')} .. {derived.get('max_value')}",
+            "High Load Mean": derived.get("high_load_mean"),
+        })
 
     y = _draw_key_value_block(c, input_labels, margin_x, y)
     y -= 8
