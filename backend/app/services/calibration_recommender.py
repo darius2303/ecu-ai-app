@@ -16,9 +16,35 @@ def _changed_percent(item: dict[str, Any]) -> float:
     return float(diff.get("changed_percent") or 0.0)
 
 
+def _zone_text(item: dict[str, Any]) -> str:
+    zones = item.get("affected_zone") or []
+    if not isinstance(zones, list):
+        return ""
+    parts: list[str] = []
+    for zone in zones[:3]:
+        if not isinstance(zone, dict):
+            continue
+        label = zone.get("label") or "axis"
+        minimum = zone.get("min")
+        maximum = zone.get("max")
+        if minimum is None or maximum is None:
+            continue
+        parts.append(f"{label} {minimum}-{maximum}")
+    return ", ".join(parts)
+
+
+def _dominant_zone(category_maps: list[dict[str, Any]]) -> str:
+    changed = sorted(category_maps, key=_changed_percent, reverse=True)
+    for item in changed:
+        zone = _zone_text(item)
+        if zone:
+            return zone
+    return ""
+
+
 def _confidence(category: str, grouped: dict[str, list[str]], has_modified: bool) -> str:
     supporting = 0
-    for key in ("torque", "boost", "fuel", "air_fuel", "timing", "rail_pressure"):
+    for key in ("torque", "boost", "fuel", "air_fuel", "timing", "rail_pressure", "limiter"):
         if grouped.get(key):
             supporting += 1
 
@@ -34,6 +60,8 @@ def _confidence(category: str, grouped: dict[str, list[str]], has_modified: bool
 def _risk(category: str, requested_percent: str, grouped: dict[str, list[str]]) -> str:
     if category in {"timing", "rail_pressure"}:
         return "high"
+    if category == "limiter":
+        return "medium-high"
     if category == "boost" and not grouped.get("air_fuel"):
         return "medium-high"
     if category == "fuel" and not grouped.get("air_fuel"):
@@ -115,6 +143,17 @@ def generate_power_recommendations(
                 "urmareste rail actual vs target in loguri",
             ],
         },
+        "limiter": {
+            "title": "RPM / speed limiters",
+            "target_zone": "doar daca hardware-ul si transmisia permit",
+            "suggested_change": "revizuire controlata, fara eliminare globala",
+            "reason": "Limiterele pot permite o plaja mai larga de utilizare, dar nu cresc singure puterea si pot elimina protectii importante.",
+            "checks": [
+                "verifica limita mecanica motor/transmisie",
+                "pastreaza protectiile termice si de siguranta",
+                "coreleaza cu fuel, timing si loguri reale",
+            ],
+        },
     }
 
     for category, template in templates.items():
@@ -125,18 +164,25 @@ def generate_power_recommendations(
             continue
 
         max_changed = max((_changed_percent(item) for item in category_maps), default=0.0)
+        zone = _dominant_zone(category_maps)
+        reason = template["reason"]
+        if zone and has_modified:
+            reason = f"{reason} In fisierul modificat, zona afectata dominant este: {zone}."
+        elif not has_modified:
+            reason = f"{reason} Nu exista fisier tuned incarcat, deci recomandarea este orientativa si trebuie validata pe loguri."
         recommendations.append(
             {
                 "category": category,
                 "title": template["title"],
                 "maps": [str(item.get("name") or "Map") for item in category_maps[:5]],
-                "target_zone": template["target_zone"],
+                "target_zone": zone or template["target_zone"],
                 "suggested_change": template["suggested_change"],
-                "reason": template["reason"],
+                "reason": reason,
                 "checks": template["checks"],
                 "risk": _risk(category, template["suggested_change"], grouped),
                 "confidence": _confidence(category, grouped, has_modified),
                 "current_change_percent": round(max_changed, 2),
+                "affected_zone": zone,
                 "mode": "review_existing_change" if has_modified and max_changed > 0 else "suggest_next_change",
             }
         )

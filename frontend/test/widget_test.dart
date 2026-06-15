@@ -15,8 +15,8 @@ void main() {
   testWidgets('ECU app renders the main screen', (WidgetTester tester) async {
     await tester.pumpWidget(const EcuAiApp());
 
-    expect(find.text('ECU Calibration'), findsOneWidget);
-    expect(find.text('Calibration analyzer'), findsOneWidget);
+    expect(find.text('ECU Stage 1 Assistant'), findsWidgets);
+    expect(find.text('Calibration Input'), findsOneWidget);
     expect(find.text('Analyze calibration'), findsOneWidget);
   });
 

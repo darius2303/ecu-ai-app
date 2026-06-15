@@ -128,24 +128,6 @@ class _HomePageState extends State<HomePage> {
   String? savedPdfPath;
   int mobileTabIndex = 0;
 
-  static const String sampleSoiMap = '''
-        0.0     5.0     10.0    15.0    20.0    25.0    30.0    35.0    40.0    45.0    50.0    55.0
-100     -10.99  -10.99  -10.99  -10.99  -10.99  -10.99  -10.99  -10.99  -10.99  -10.99  -10.99  -10.99
-400     -0.00   -0.00   -0.00   -1.99   -5.49   -9.00   -12.00  -13.99  -15.00  -15.00  -15.00  -15.00
-800     -0.00   -0.00   -0.00   -1.99   -5.49   -9.00   -12.00  -13.99  -15.00  -15.00  -15.00  -15.00
-1250    -0.70   -0.70   -0.70   -1.99   -5.49   -9.00   -12.00  -13.48  -15.00  -15.00  -15.00  -15.00
-1500    -1.71   -1.71   -1.71   -2.39   -4.64   -6.14   -7.60   -10.01  -12.31  -13.01  -13.01  -13.01
-1750    -2.42   -2.42   -2.42   -3.21   -4.85   -6.17   -7.29   -8.51   -10.67  -11.51  -11.51  -11.51
-2000    -2.95   -2.95   -2.95   -3.68   -5.04   -6.24   -7.29   -8.51   -10.50  -12.00  -12.00  -12.00
-2250    -3.75   -3.75   -3.75   -4.43   -5.88   -7.03   -7.99   -9.10   -11.04  -13.24  -13.24  -13.24
-2500    -5.51   -5.51   -5.51   -6.21   -7.15   -8.16   -9.31   -10.60  -12.00  -14.60  -14.60  -14.60
-3000    -9.33   -9.33   -9.33   -10.95  -12.28  -13.24  -14.20  -15.77  -16.57  -17.72  -18.42  -18.42
-3500    -12.26  -12.26  -12.26  -14.44  -16.55  -17.39  -18.07  -19.01  -19.88  -21.19  -22.24  -22.24
-4000    -15.00  -15.00  -15.00  -17.25  -19.99  -21.00  -21.59  -22.01  -22.50  -23.51  -24.00  -24.00
-4250    -15.94  -15.94  -15.94  -17.95  -20.81  -21.47  -21.99  -22.43  -23.02  -23.98  -24.45  -24.45
-5000    -17.35  -17.35  -17.35  -19.17  -21.75  -22.52  -22.99  -23.42  -24.09  -25.03  -25.50  -25.50
-''';
-
   double? parseNumber(String value) {
     final normalized = value.trim().replaceAll(',', '.');
     if (normalized.isEmpty) return null;
@@ -244,7 +226,7 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> selectCalibrationDefinitions() async {
     try {
-      final file = await pickCalibrationFile(['csv', 'json']);
+      final file = await pickCalibrationFile(['csv', 'json', 'kp']);
       if (file == null) return;
       setState(() {
         definitionsCalibrationFileName = file.name;
@@ -259,11 +241,48 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  void clearCalibrationOutputs() {
+    calibrationResult = null;
+    calibrationError = null;
+    heatmapBytes = null;
+    savedPdfPath = null;
+    stage1GainPercent = null;
+    potentialClass = null;
+    estimatedHpAfterStage1 = null;
+    derivedFeatures = null;
+  }
+
+  void removeCalibrationOriginal() {
+    setState(() {
+      originalCalibrationFileName = null;
+      originalCalibrationBytes = null;
+      clearCalibrationOutputs();
+    });
+  }
+
+  void removeCalibrationModified() {
+    setState(() {
+      modifiedCalibrationFileName = null;
+      modifiedCalibrationBytes = null;
+      clearCalibrationOutputs();
+    });
+  }
+
+  void removeCalibrationDefinitions() {
+    setState(() {
+      definitionsCalibrationFileName = null;
+      definitionsCalibrationBytes = null;
+      clearCalibrationOutputs();
+    });
+  }
+
   Future<void> analyzeCalibrationFiles() async {
     FocusScope.of(context).unfocus();
 
     final originalName = originalCalibrationFileName;
     final originalBytes = originalCalibrationBytes;
+    final modifiedName = modifiedCalibrationFileName;
+    final modifiedBytes = modifiedCalibrationBytes;
     if (originalName == null || originalBytes == null) {
       setState(() {
         calibrationError = 'Incarca fisierul original inainte de analiza.';
@@ -280,8 +299,8 @@ class _HomePageState extends State<HomePage> {
       final result = await api.analyzeCalibration(
         originalFileName: originalName,
         originalBytes: originalBytes,
-        modifiedFileName: modifiedCalibrationFileName,
-        modifiedBytes: modifiedCalibrationBytes,
+        modifiedFileName: modifiedName,
+        modifiedBytes: modifiedBytes,
         definitionsFileName: definitionsCalibrationFileName,
         definitionsBytes: definitionsCalibrationBytes,
         engineDisplacement: parseNumber(displacementController.text),
@@ -292,6 +311,23 @@ class _HomePageState extends State<HomePage> {
 
       setState(() {
         calibrationResult = result;
+        final estimate = asStringMap(result['power_estimate']);
+        if (estimate != null && estimate['available'] == true) {
+          stage1GainPercent = (estimate['stage1_gain_percent'] as num?)
+              ?.toDouble();
+          potentialClass = estimate['potential_class']?.toString();
+          estimatedHpAfterStage1 =
+              (estimate['estimated_hp_after_stage1'] as num?)?.toDouble();
+          derivedFeatures = asStringMap(estimate['derived_inputs']);
+        } else {
+          stage1GainPercent = null;
+          potentialClass = null;
+          estimatedHpAfterStage1 = null;
+          derivedFeatures = null;
+        }
+        if (MediaQuery.sizeOf(context).width < _mobileBreakpoint) {
+          mobileTabIndex = 1;
+        }
       });
     } catch (e) {
       setState(() {
@@ -349,6 +385,7 @@ class _HomePageState extends State<HomePage> {
           potentialClass = null;
           estimatedHpAfterStage1 = null;
           fuelMapResult = null;
+          calibrationResult = null;
           heatmapBytes = null;
           savedPdfPath = null;
         });
@@ -369,6 +406,7 @@ class _HomePageState extends State<HomePage> {
           potentialClass = null;
           estimatedHpAfterStage1 = null;
           fuelMapResult = null;
+          calibrationResult = null;
           heatmapBytes = null;
           savedPdfPath = null;
         });
@@ -414,10 +452,17 @@ class _HomePageState extends State<HomePage> {
         final estimate = asStringMap(calibration['power_estimate']);
 
         if (estimate == null || estimate['available'] != true) {
-          throw Exception(
-            estimate?['reason'] ??
-                'Fisierul binar are nevoie de definitions CSV/JSON pentru estimare.',
-          );
+          setState(() {
+            calibrationResult = calibration;
+            stage1GainPercent = null;
+            potentialClass = null;
+            estimatedHpAfterStage1 = null;
+            derivedFeatures = null;
+            if (showResultsAfterAnalyze) {
+              mobileTabIndex = 1;
+            }
+          });
+          return;
         }
 
         setState(() {
@@ -443,6 +488,7 @@ class _HomePageState extends State<HomePage> {
         estimatedHpAfterStage1 = (result['estimated_hp_after_stage1'] as num?)
             ?.toDouble();
         derivedFeatures = asStringMap(result['derived_features']);
+        calibrationResult = null;
         if (showResultsAfterAnalyze) {
           mobileTabIndex = 1;
         }
@@ -578,12 +624,30 @@ class _HomePageState extends State<HomePage> {
     });
 
     try {
-      final bytes = await api.report(buildInputData());
+      final originalName = originalCalibrationFileName;
+      final originalBytes = originalCalibrationBytes;
+      final useCalibrationReport =
+          originalName != null && originalBytes != null;
+      final bytes = useCalibrationReport
+          ? await api.calibrationReport(
+              originalFileName: originalName,
+              originalBytes: originalBytes,
+              modifiedFileName: modifiedCalibrationFileName,
+              modifiedBytes: modifiedCalibrationBytes,
+              definitionsFileName: definitionsCalibrationFileName,
+              definitionsBytes: definitionsCalibrationBytes,
+              engineDisplacement: parseNumber(displacementController.text),
+              fuelType: fuelType,
+              isTurbo: isTurbo,
+              stockHp: parseNumber(stockHpController.text),
+            )
+          : await api.report(buildInputData());
+      final fileName = useCalibrationReport
+          ? 'calibration_tuner_report.pdf'
+          : 'stage1_report.pdf';
 
       final directory = await getApplicationDocumentsDirectory();
-      final file = File(
-        '${directory.path}${Platform.pathSeparator}stage1_report.pdf',
-      );
+      final file = File('${directory.path}${Platform.pathSeparator}$fileName');
       await file.writeAsBytes(bytes, flush: true);
 
       setState(() {
@@ -663,38 +727,36 @@ class _HomePageState extends State<HomePage> {
     required String? fileName,
     required IconData icon,
     required VoidCallback onPressed,
+    required VoidCallback onClear,
     bool optional = false,
   }) {
-    final hasFile = fileName != null;
-    return OutlinedButton.icon(
-      onPressed: loadingCalibrationAnalyze ? null : onPressed,
-      icon: Icon(hasFile ? Icons.check_circle_rounded : icon),
-      label: Align(
-        alignment: Alignment.centerLeft,
-        child: Text(
-          hasFile ? fileName : '$label${optional ? ' optional' : ''}',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-      ),
+    return _CalibrationFilePicker(
+      label: label,
+      fileName: fileName,
+      icon: icon,
+      optional: optional,
+      disabled: loadingCalibrationAnalyze,
+      onPressed: onPressed,
+      onClear: onClear,
     );
   }
 
-  Widget buildCalibrationAnalyzer(bool busy) {
-    final summary = asStringMap(calibrationResult?['summary']);
-    final binaryDiff = asStringMap(calibrationResult?['binary_diff']);
-    final powerEstimate = asStringMap(calibrationResult?['power_estimate']);
-    final recommendations = asList(calibrationResult?['recommendations']);
-    final findings = asList(calibrationResult?['findings']);
-    final warnings = asList(calibrationResult?['warnings']);
-    final maps = asList(calibrationResult?['maps']);
+  Widget buildInputForm(bool busy) {
+    final engineFields = [
+      buildTextField(
+        'Engine Displacement',
+        displacementController,
+        hint: '2.0',
+        suffix: 'L',
+      ),
+      buildTextField('Stock HP', stockHpController, hint: '150', suffix: 'hp'),
+    ];
 
     return _SectionPanel(
-      icon: Icons.manage_search_rounded,
-      title: 'Calibration Analyzer',
+      icon: Icons.tune_rounded,
+      title: 'Calibration Input',
       subtitle:
-          'Compara fisiere ECU si extrage diferente pe harti cand exista definitii.',
-      accentColor: const Color(0xFF0F766E),
+          'Analizeaza originalul cu map pack si compara cu tuned cand exista.',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -711,29 +773,32 @@ class _HomePageState extends State<HomePage> {
                   SizedBox(
                     width: width,
                     child: buildCalibrationFileButton(
-                      label: 'Original file',
+                      label: 'Original calibration',
                       fileName: originalCalibrationFileName,
                       icon: Icons.source_rounded,
                       onPressed: selectCalibrationOriginal,
+                      onClear: removeCalibrationOriginal,
                     ),
                   ),
                   SizedBox(
                     width: width,
                     child: buildCalibrationFileButton(
-                      label: 'Modified file',
+                      label: 'Tuned/current file',
                       fileName: modifiedCalibrationFileName,
                       icon: Icons.compare_arrows_rounded,
                       onPressed: selectCalibrationModified,
+                      onClear: removeCalibrationModified,
                       optional: true,
                     ),
                   ),
                   SizedBox(
                     width: width,
                     child: buildCalibrationFileButton(
-                      label: 'Definitions CSV/JSON',
+                      label: 'Map pack / definitions',
                       fileName: definitionsCalibrationFileName,
                       icon: Icons.list_alt_rounded,
                       onPressed: selectCalibrationDefinitions,
+                      onClear: removeCalibrationDefinitions,
                       optional: true,
                     ),
                   ),
@@ -742,443 +807,13 @@ class _HomePageState extends State<HomePage> {
             },
           ),
           const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: busy ? null : analyzeCalibrationFiles,
-                  icon: loadingCalibrationAnalyze
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2.3),
-                        )
-                      : const Icon(Icons.analytics_rounded),
-                  label: const Text('Analyze calibration'),
-                ),
-              ),
-              const SizedBox(width: 10),
-              IconButton.outlined(
-                tooltip: 'Clear calibration files',
-                onPressed: busy
-                    ? null
-                    : () {
-                        setState(() {
-                          originalCalibrationFileName = null;
-                          originalCalibrationBytes = null;
-                          modifiedCalibrationFileName = null;
-                          modifiedCalibrationBytes = null;
-                          definitionsCalibrationFileName = null;
-                          definitionsCalibrationBytes = null;
-                          calibrationResult = null;
-                          calibrationError = null;
-                        });
-                      },
-                icon: const Icon(Icons.clear_rounded),
-              ),
-            ],
-          ),
-          if (calibrationError != null) ...[
-            const SizedBox(height: 14),
-            _InlineNotice(
-              icon: Icons.error_outline_rounded,
-              text: calibrationError!,
-              color: const Color(0xFFB91C1C),
-            ),
-          ],
-          if (summary != null) ...[
-            const SizedBox(height: 14),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final isWide = constraints.maxWidth >= 760;
-                final tileWidth = isWide
-                    ? (constraints.maxWidth - 28) / 3
-                    : constraints.maxWidth;
-                return Wrap(
-                  spacing: 14,
-                  runSpacing: 14,
-                  children: [
-                    SizedBox(
-                      width: tileWidth,
-                      child: _CompactMetric(
-                        icon: Icons.memory_rounded,
-                        label: 'Original',
-                        value: formatFileSize(summary['original_size'] as int?),
-                      ),
-                    ),
-                    SizedBox(
-                      width: tileWidth,
-                      child: _CompactMetric(
-                        icon: Icons.table_chart_rounded,
-                        label: 'Maps extracted',
-                        value: '${summary['maps_extracted'] ?? 0}',
-                      ),
-                    ),
-                    SizedBox(
-                      width: tileWidth,
-                      child: _CompactMetric(
-                        icon: Icons.difference_rounded,
-                        label: 'Maps changed',
-                        value: '${summary['maps_changed'] ?? 0}',
-                      ),
-                    ),
-                  ],
-                );
-              },
-            ),
-          ],
-          if (binaryDiff != null) ...[
-            const SizedBox(height: 14),
-            _InlineNotice(
-              icon: Icons.data_object_rounded,
-              text:
-                  'Binary diff: ${binaryDiff['changed_bytes']} bytes changed (${binaryDiff['changed_percent']}%).',
-              color: const Color(0xFF0F766E),
-            ),
-          ],
-          if (powerEstimate != null) ...[
-            const SizedBox(height: 14),
-            _PowerEstimatePanel(estimate: powerEstimate),
-          ],
-          if (recommendations.isNotEmpty) ...[
-            const SizedBox(height: 14),
-            _RecommendationPanel(items: recommendations),
-          ],
-          if (findings.isNotEmpty) ...[
-            const SizedBox(height: 14),
-            for (final item in findings.take(5)) ...[
-              _FindingRow(finding: Map<String, dynamic>.from(item as Map)),
-              const SizedBox(height: 8),
-            ],
-          ],
-          if (maps.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            _MapBrowser(items: maps),
-          ],
-          if (warnings.isNotEmpty) ...[
-            const SizedBox(height: 14),
-            for (final warning in warnings.take(4))
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: _InlineNotice(
-                  icon: Icons.info_outline_rounded,
-                  text: '$warning',
-                  color: const Color(0xFF92400E),
-                ),
-              ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget buildInputForm(bool busy) {
-    final manualFields = [
-      buildTextField('RPM', rpmController, hint: '3500'),
-      buildTextField(
-        'Boost Pressure',
-        boostController,
-        hint: '1.6',
-        suffix: 'bar',
-      ),
-      buildTextField(
-        'Injection Quantity',
-        injectionController,
-        hint: '55',
-        suffix: 'mg',
-      ),
-      buildTextField('AFR', afrController, hint: '14.7'),
-    ];
-    final engineFields = [
-      buildTextField(
-        'Engine Displacement',
-        displacementController,
-        hint: '2.0',
-        suffix: 'L',
-      ),
-      buildTextField('Stock HP', stockHpController, hint: '150', suffix: 'hp'),
-    ];
-
-    return _SectionPanel(
-      icon: Icons.tune_rounded,
-      title: 'Input ECU',
-      subtitle:
-          'Importa o harta exportata din WinOLS si verifica valorile extrase.',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Align(
-            alignment: Alignment.centerLeft,
-            child: SegmentedButton<String>(
-              segments: const [
-                ButtonSegment(
-                  value: 'file',
-                  icon: Icon(Icons.upload_file_rounded),
-                  label: Text('Fisier'),
-                ),
-                ButtonSegment(
-                  value: 'paste',
-                  icon: Icon(Icons.grid_on_rounded),
-                  label: Text('Paste'),
-                ),
-                ButtonSegment(
-                  value: 'manual',
-                  icon: Icon(Icons.edit_note_rounded),
-                  label: Text('Manual'),
-                ),
-              ],
-              selected: {inputMode},
-              onSelectionChanged: busy
-                  ? null
-                  : (selection) {
-                      setState(() {
-                        inputMode = selection.first;
-                      });
-                    },
-            ),
+          const _InlineNotice(
+            icon: Icons.info_outline_rounded,
+            text:
+                'Cu doar original + map pack pot sugera directii de tuning. Cu tuned/current pot compara ce s-a schimbat deja si pot estima riscuri pe zone.',
+            color: Color(0xFF475569),
           ),
           const SizedBox(height: 16),
-          if (inputMode == 'file') ...[
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final isWide = constraints.maxWidth >= 620;
-                return Wrap(
-                  spacing: 14,
-                  runSpacing: 14,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    SizedBox(
-                      width: isWide
-                          ? (constraints.maxWidth - 14) / 2
-                          : constraints.maxWidth,
-                      child: DropdownButtonFormField<String>(
-                        initialValue: calibrationMapType,
-                        decoration: const InputDecoration(
-                          labelText: 'Map Type',
-                          prefixIcon: Icon(Icons.table_chart_rounded),
-                        ),
-                        items: const [
-                          DropdownMenuItem(
-                            value: 'soi',
-                            child: Text('SOI timing'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'fuel',
-                            child: Text('Fuel qty'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'boost',
-                            child: Text('Boost'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'torque',
-                            child: Text('Torque'),
-                          ),
-                        ],
-                        onChanged: busy
-                            ? null
-                            : (value) {
-                                if (value == null) return;
-                                setState(() {
-                                  calibrationMapType = value;
-                                  parsedCalibrationMap = null;
-                                  selectedMapFileName = null;
-                                  selectedBinaryEcuFileName = null;
-                                  selectedBinaryEcuBytes = null;
-                                  derivedFeatures = null;
-                                  fuelMapResult = null;
-                                });
-                              },
-                      ),
-                    ),
-                    SizedBox(
-                      width: isWide
-                          ? (constraints.maxWidth - 14) / 2
-                          : constraints.maxWidth,
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: busy ? null : importMapFile,
-                              icon: loadingParse
-                                  ? const SizedBox(
-                                      width: 18,
-                                      height: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2.2,
-                                      ),
-                                    )
-                                  : const Icon(Icons.upload_file_rounded),
-                              label: const Text('Import file'),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          IconButton.outlined(
-                            tooltip: 'Clear file',
-                            onPressed: busy
-                                ? null
-                                : () {
-                                    setState(() {
-                                      parsedCalibrationMap = null;
-                                      selectedMapFileName = null;
-                                      selectedBinaryEcuFileName = null;
-                                      selectedBinaryEcuBytes = null;
-                                      derivedFeatures = null;
-                                      fuelMapResult = null;
-                                    });
-                                  },
-                            icon: const Icon(Icons.clear_rounded),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                );
-              },
-            ),
-            if (selectedMapFileName != null) ...[
-              const SizedBox(height: 14),
-              _ImportedMapNote(
-                fileName: selectedMapFileName!,
-                isBinary: selectedBinaryEcuBytes != null,
-              ),
-            ],
-            if (derivedFeatures != null) ...[
-              const SizedBox(height: 14),
-              _DerivedMapSummary(features: derivedFeatures!),
-            ],
-            const SizedBox(height: 16),
-          ] else if (inputMode == 'paste') ...[
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final isWide = constraints.maxWidth >= 620;
-                return Wrap(
-                  spacing: 14,
-                  runSpacing: 14,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    SizedBox(
-                      width: isWide
-                          ? (constraints.maxWidth - 14) / 2
-                          : constraints.maxWidth,
-                      child: DropdownButtonFormField<String>(
-                        initialValue: calibrationMapType,
-                        decoration: const InputDecoration(
-                          labelText: 'Map Type',
-                          prefixIcon: Icon(Icons.table_chart_rounded),
-                        ),
-                        items: const [
-                          DropdownMenuItem(
-                            value: 'soi',
-                            child: Text('SOI timing'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'fuel',
-                            child: Text('Fuel qty'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'boost',
-                            child: Text('Boost'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'torque',
-                            child: Text('Torque'),
-                          ),
-                        ],
-                        onChanged: busy
-                            ? null
-                            : (value) {
-                                if (value == null) return;
-                                setState(() {
-                                  calibrationMapType = value;
-                                });
-                              },
-                      ),
-                    ),
-                    SizedBox(
-                      width: isWide
-                          ? (constraints.maxWidth - 14) / 2
-                          : constraints.maxWidth,
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: busy
-                                  ? null
-                                  : () {
-                                      setState(() {
-                                        mapTextController.text = sampleSoiMap
-                                            .trim();
-                                        calibrationMapType = 'soi';
-                                        selectedBinaryEcuFileName = null;
-                                        selectedBinaryEcuBytes = null;
-                                      });
-                                    },
-                              icon: const Icon(Icons.dataset_rounded),
-                              label: const Text('Load sample'),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          IconButton.outlined(
-                            tooltip: 'Clear map',
-                            onPressed: busy
-                                ? null
-                                : () {
-                                    setState(() {
-                                      mapTextController.clear();
-                                      selectedBinaryEcuFileName = null;
-                                      selectedBinaryEcuBytes = null;
-                                    });
-                                  },
-                            icon: const Icon(Icons.clear_rounded),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                );
-              },
-            ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: mapTextController,
-              minLines: 10,
-              maxLines: 16,
-              keyboardType: TextInputType.multiline,
-              style: const TextStyle(
-                fontFamily: 'monospace',
-                fontSize: 12.5,
-                height: 1.35,
-              ),
-              decoration: const InputDecoration(
-                labelText: 'WinOLS table paste',
-                hintText:
-                    'Prima linie poate fi axa X; randurile urmatoare: RPM + valorile hartii',
-                alignLabelWithHint: true,
-              ),
-            ),
-            const SizedBox(height: 16),
-          ] else ...[
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final isWide = constraints.maxWidth >= 680;
-                return Wrap(
-                  spacing: 14,
-                  runSpacing: 14,
-                  children: [
-                    for (final field in manualFields)
-                      SizedBox(
-                        width: isWide
-                            ? (constraints.maxWidth - 14) / 2
-                            : constraints.maxWidth,
-                        child: field,
-                      ),
-                  ],
-                );
-              },
-            ),
-            const SizedBox(height: 16),
-          ],
           LayoutBuilder(
             builder: (context, constraints) {
               final isWide = constraints.maxWidth >= 680;
@@ -1277,15 +912,15 @@ class _HomePageState extends State<HomePage> {
           ),
           const SizedBox(height: 20),
           FilledButton.icon(
-            onPressed: loadingAnalyze ? null : analyzeData,
-            icon: loadingAnalyze
+            onPressed: busy ? null : analyzeCalibrationFiles,
+            icon: loadingCalibrationAnalyze
                 ? const SizedBox(
                     width: 18,
                     height: 18,
                     child: CircularProgressIndicator(strokeWidth: 2.3),
                   )
                 : const Icon(Icons.analytics_rounded),
-            label: const Text('Analyze'),
+            label: const Text('Analyze calibration'),
           ),
         ],
       ),
@@ -1293,10 +928,18 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget buildResultCard() {
+    final summary = asStringMap(calibrationResult?['summary']);
+    final binaryDiff = asStringMap(calibrationResult?['binary_diff']);
+    final maps = asList(calibrationResult?['maps']);
+    final recommendations = asList(calibrationResult?['recommendations']);
+    final warnings = asList(calibrationResult?['warnings']);
+    final report = asStringMap(calibrationResult?['report']);
     final hasResult =
+        calibrationResult != null ||
         stage1GainPercent != null ||
         potentialClass != null ||
-        estimatedHpAfterStage1 != null;
+        estimatedHpAfterStage1 != null ||
+        recommendations.isNotEmpty;
 
     if (errorMessage != null) {
       return _SectionPanel(
@@ -1313,6 +956,21 @@ class _HomePageState extends State<HomePage> {
         ),
       );
     }
+    if (calibrationError != null) {
+      return _SectionPanel(
+        icon: Icons.error_outline_rounded,
+        title: 'Analiza nu a putut rula',
+        subtitle: 'Verifica fisierele incarcate si incearca din nou.',
+        accentColor: Colors.red,
+        child: Text(
+          calibrationError!,
+          style: const TextStyle(
+            color: Color(0xFFB42318),
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      );
+    }
 
     if (!hasResult) {
       return _SectionPanel(
@@ -1321,7 +979,8 @@ class _HomePageState extends State<HomePage> {
         subtitle: 'Rezultatele vor aparea aici dupa prima analiza.',
         child: const _EmptyState(
           icon: Icons.insights_rounded,
-          text: 'Introdu datele motorului si apasa Analyze.',
+          text:
+              'Incarca originalul, fisierul tuned si apasa Analyze calibration.',
         ),
       );
     }
@@ -1329,54 +988,132 @@ class _HomePageState extends State<HomePage> {
     return _SectionPanel(
       icon: Icons.auto_graph_rounded,
       title: 'Rezultat analiza',
-      subtitle: 'Estimare orientativa pentru un setup Stage 1.',
+      subtitle: 'Diferente, harti afectate si recomandari pentru tuner.',
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final isWide = constraints.maxWidth >= 680;
-              final tileWidth = isWide
-                  ? (constraints.maxWidth - 28) / 3
-                  : constraints.maxWidth;
-              return Wrap(
-                spacing: 14,
-                runSpacing: 14,
-                children: [
-                  SizedBox(
-                    width: tileWidth,
-                    child: _MetricTile(
-                      icon: Icons.trending_up_rounded,
-                      label: 'Stage 1 Gain',
-                      value: stage1GainPercent != null
-                          ? '${stage1GainPercent!.toStringAsFixed(2)}%'
-                          : '-',
+          if (summary != null)
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final isWide = constraints.maxWidth >= 760;
+                final tileWidth = isWide
+                    ? (constraints.maxWidth - 28) / 3
+                    : constraints.maxWidth;
+                return Wrap(
+                  spacing: 14,
+                  runSpacing: 14,
+                  children: [
+                    SizedBox(
+                      width: tileWidth,
+                      child: _CompactMetric(
+                        icon: Icons.memory_rounded,
+                        label: 'Original',
+                        value: formatFileSize(summary['original_size'] as int?),
+                      ),
                     ),
-                  ),
-                  SizedBox(
-                    width: tileWidth,
-                    child: _MetricTile(
-                      icon: Icons.workspace_premium_rounded,
-                      label: 'Potential',
-                      value: potentialClass ?? '-',
+                    SizedBox(
+                      width: tileWidth,
+                      child: _CompactMetric(
+                        icon: Icons.table_chart_rounded,
+                        label: 'Maps extracted',
+                        value: '${summary['maps_extracted'] ?? 0}',
+                      ),
                     ),
-                  ),
-                  SizedBox(
-                    width: tileWidth,
-                    child: _MetricTile(
-                      icon: Icons.bolt_rounded,
-                      label: 'HP dupa Stage 1',
-                      value: estimatedHpAfterStage1 != null
-                          ? estimatedHpAfterStage1!.toStringAsFixed(2)
-                          : '-',
+                    SizedBox(
+                      width: tileWidth,
+                      child: _CompactMetric(
+                        icon: Icons.difference_rounded,
+                        label: 'Maps changed',
+                        value: '${summary['maps_changed'] ?? 0}',
+                      ),
                     ),
-                  ),
-                ],
-              );
-            },
-          ),
+                  ],
+                );
+              },
+            ),
+          if (binaryDiff != null) ...[
+            const SizedBox(height: 14),
+            _InlineNotice(
+              icon: Icons.data_object_rounded,
+              text:
+                  'Binary diff: ${binaryDiff['changed_bytes']} bytes changed (${binaryDiff['changed_percent']}%).',
+              color: const Color(0xFF0F766E),
+            ),
+          ],
+          if (stage1GainPercent != null ||
+              potentialClass != null ||
+              estimatedHpAfterStage1 != null) ...[
+            const SizedBox(height: 14),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final isWide = constraints.maxWidth >= 680;
+                final tileWidth = isWide
+                    ? (constraints.maxWidth - 28) / 3
+                    : constraints.maxWidth;
+                return Wrap(
+                  spacing: 14,
+                  runSpacing: 14,
+                  children: [
+                    SizedBox(
+                      width: tileWidth,
+                      child: _MetricTile(
+                        icon: Icons.trending_up_rounded,
+                        label: 'Rough gain',
+                        value: stage1GainPercent != null
+                            ? '${stage1GainPercent!.toStringAsFixed(2)}%'
+                            : '-',
+                      ),
+                    ),
+                    SizedBox(
+                      width: tileWidth,
+                      child: _MetricTile(
+                        icon: Icons.workspace_premium_rounded,
+                        label: 'Potential',
+                        value: potentialClass ?? '-',
+                      ),
+                    ),
+                    SizedBox(
+                      width: tileWidth,
+                      child: _MetricTile(
+                        icon: Icons.bolt_rounded,
+                        label: 'Estimated HP',
+                        value: estimatedHpAfterStage1 != null
+                            ? estimatedHpAfterStage1!.toStringAsFixed(2)
+                            : '-',
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ],
           if (derivedFeatures != null) ...[
             const SizedBox(height: 14),
             _DerivedMapSummary(features: derivedFeatures!),
+          ],
+          if (report != null) ...[
+            const SizedBox(height: 14),
+            _CalibrationReportPanel(report: report),
+          ],
+          if (recommendations.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            _RecommendationPanel(items: recommendations),
+          ],
+          if (warnings.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            for (final warning in warnings.take(3))
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: _InlineNotice(
+                  icon: Icons.info_outline_rounded,
+                  text: '$warning',
+                  color: const Color(0xFF92400E),
+                ),
+              ),
+          ],
+          if (maps.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            _MapBrowser(items: maps),
           ],
           if (savedPdfPath != null) ...[
             const SizedBox(height: 14),
@@ -1470,60 +1207,36 @@ class _HomePageState extends State<HomePage> {
     return _SectionPanel(
       icon: Icons.file_download_done_rounded,
       title: 'Output',
-      subtitle: 'Genereaza harta, imaginea heatmap sau raportul PDF.',
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final isWide = constraints.maxWidth >= 760;
-          final buttonWidth = isWide
-              ? (constraints.maxWidth - 24) / 3
-              : constraints.maxWidth;
-
-          return Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              SizedBox(
-                width: buttonWidth,
-                child: buildActionButton(
-                  label: 'Generate Fuel Map',
-                  icon: Icons.table_chart_rounded,
-                  onPressed: generateFuelMap,
-                  isLoading: loadingFuelMap,
-                ),
-              ),
-              SizedBox(
-                width: buttonWidth,
-                child: buildActionButton(
-                  label: 'View Heatmap',
-                  icon: Icons.image_search_rounded,
-                  onPressed: viewHeatmap,
-                  isLoading: loadingHeatmap,
-                ),
-              ),
-              SizedBox(
-                width: buttonWidth,
-                child: buildActionButton(
-                  label: 'Generate PDF',
-                  icon: Icons.picture_as_pdf_rounded,
-                  onPressed: generatePdfReport,
-                  isLoading: loadingReport,
-                ),
-              ),
-            ],
-          );
-        },
+      subtitle: 'Export raport PDF si vizualizare harti in browser.',
+      child: Wrap(
+        spacing: 10,
+        runSpacing: 10,
+        children: [
+          buildActionButton(
+            label: 'View Heatmap (2D)',
+            icon: Icons.grid_on_rounded,
+            onPressed: viewHeatmap,
+            isLoading: loadingHeatmap,
+          ),
+          buildActionButton(
+            label: 'Export PDF Report',
+            icon: Icons.picture_as_pdf_rounded,
+            onPressed: generatePdfReport,
+            isLoading: loadingReport,
+          ),
+        ],
       ),
     );
   }
 
   Widget buildMobileStatusStrip() {
-    final gainValue = stage1GainPercent == null
-        ? '--'
-        : '${stage1GainPercent!.toStringAsFixed(1)}%';
-    final hpValue = estimatedHpAfterStage1 == null
-        ? '--'
-        : estimatedHpAfterStage1!.toStringAsFixed(0);
-    final mapValue = fuelMapResult == null ? 'Pending' : 'Ready';
+    final diff = asStringMap(calibrationResult?['binary_diff']);
+    final summary = asStringMap(calibrationResult?['summary']);
+    final changedValue = diff == null ? '--' : '${diff['changed_percent']}%';
+    final mapsValue = summary == null ? '--' : '${summary['maps_extracted']}';
+    final recValue = calibrationResult == null
+        ? 'Pending'
+        : '${asList(calibrationResult?['recommendations']).length}';
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -1532,20 +1245,20 @@ class _HomePageState extends State<HomePage> {
         children: [
           _MobileStatChip(
             icon: Icons.trending_up_rounded,
-            label: 'Gain',
-            value: gainValue,
-          ),
-          const SizedBox(width: 10),
-          _MobileStatChip(
-            icon: Icons.bolt_rounded,
-            label: 'Stage 1 HP',
-            value: hpValue,
+            label: 'Diff',
+            value: changedValue,
           ),
           const SizedBox(width: 10),
           _MobileStatChip(
             icon: Icons.table_chart_rounded,
-            label: 'Fuel map',
-            value: mapValue,
+            label: 'Maps',
+            value: mapsValue,
+          ),
+          const SizedBox(width: 10),
+          _MobileStatChip(
+            icon: Icons.tips_and_updates_rounded,
+            label: 'Recs',
+            value: recValue,
           ),
         ],
       ),
@@ -1555,36 +1268,11 @@ class _HomePageState extends State<HomePage> {
   Widget buildMobileTabContent(bool busy) {
     switch (mobileTabIndex) {
       case 1:
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            buildResultCard(),
-            if (fuelMapResult != null) ...[
-              const SizedBox(height: 14),
-              buildFuelMapPreviewCard(),
-            ],
-          ],
-        );
+        return buildResultCard();
       case 2:
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            buildActions(),
-            if (fuelMapResult != null) ...[
-              const SizedBox(height: 14),
-              buildFuelMapPreviewCard(),
-            ],
-          ],
-        );
+        return buildActions();
       default:
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            buildCalibrationAnalyzer(busy),
-            const SizedBox(height: 14),
-            buildInputForm(busy),
-          ],
-        );
+        return buildInputForm(busy);
     }
   }
 
@@ -1606,7 +1294,7 @@ class _HomePageState extends State<HomePage> {
               background: Container(
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [Color(0xFF0F172A), Color(0xFF2563EB)],
+                    colors: [Color(0xFF0B1220), Color(0xFF1E3A8A)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
@@ -1629,18 +1317,25 @@ class _HomePageState extends State<HomePage> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    'Calibration analyzer',
+                                    'ECU Stage 1 Assistant',
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
                                       color: Colors.white,
                                       fontSize: 22,
                                       fontWeight: FontWeight.w900,
+                                      shadows: [
+                                        Shadow(
+                                          color: Color(0x66000000),
+                                          blurRadius: 10,
+                                          offset: Offset(0, 2),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                   SizedBox(height: 6),
                                   Text(
-                                    'Analiza ECU, fuel map si raport PDF.',
+                                    'Import fisier, estimare si sugestii tuning.',
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
@@ -1737,13 +1432,23 @@ class _HomePageState extends State<HomePage> {
                 bottom: 18,
               ),
               title: const Text(
-                'ECU Calibration',
-                style: TextStyle(fontWeight: FontWeight.w800),
+                'ECU Stage 1 Assistant',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                  shadows: [
+                    Shadow(
+                      color: Color(0x7A000000),
+                      blurRadius: 12,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
+                ),
               ),
               background: Container(
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [Color(0xFF111827), Color(0xFF1D4ED8)],
+                    colors: [Color(0xFF0B1220), Color(0xFF1E3A8A)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
@@ -1773,14 +1478,10 @@ class _HomePageState extends State<HomePage> {
                     children: [
                       const _IntroBand(),
                       const SizedBox(height: 18),
-                      buildCalibrationAnalyzer(busy),
-                      const SizedBox(height: 18),
                       buildInputForm(busy),
                       const SizedBox(height: 18),
                       buildResultCard(),
                       const SizedBox(height: 18),
-                      buildFuelMapPreviewCard(),
-                      if (fuelMapResult != null) const SizedBox(height: 18),
                       buildActions(),
                     ],
                   ),
@@ -1825,7 +1526,7 @@ class _IntroBand extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Calibration analyzer',
+                  'ECU Stage 1 Assistant',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.w800,
                     color: const Color(0xFF0F172A),
@@ -1833,7 +1534,7 @@ class _IntroBand extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Compara fisiere ECU, identifica harti modificate si pastreaza estimarea Stage 1 ca modul secundar.',
+                  'Incarca un fisier ECU sau o harta exportata, apoi primeste estimare si sugestii explicabile.',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: const Color(0xFF475569),
                     height: 1.45,
@@ -1942,170 +1643,6 @@ class _CompactMetric extends StatelessWidget {
               ],
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _FindingRow extends StatelessWidget {
-  final Map<String, dynamic> finding;
-
-  const _FindingRow({required this.finding});
-
-  Color get color {
-    switch (finding['severity']) {
-      case 'high':
-        return const Color(0xFFB91C1C);
-      case 'medium':
-        return const Color(0xFFB45309);
-      default:
-        return const Color(0xFF0F766E);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return _InlineNotice(
-      icon: Icons.report_gmailerrorred_rounded,
-      color: color,
-      text:
-          '${finding['map_name']} (${finding['category']}): ${finding['message']}',
-    );
-  }
-}
-
-class _PowerEstimatePanel extends StatelessWidget {
-  final Map<String, dynamic> estimate;
-
-  const _PowerEstimatePanel({required this.estimate});
-
-  String _value(String key, {String suffix = ''}) {
-    final value = estimate[key];
-    if (value is num) {
-      return '${value.toStringAsFixed(value % 1 == 0 ? 0 : 2)}$suffix';
-    }
-    return value == null ? '-' : '$value$suffix';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final available = estimate['available'] == true;
-    if (!available) {
-      return _InlineNotice(
-        icon: Icons.speed_rounded,
-        text:
-            estimate['reason']?.toString() ??
-            'Estimarea de putere nu este disponibila.',
-        color: const Color(0xFF64748B),
-      );
-    }
-
-    final derived = Map<String, dynamic>.from(
-      (estimate['derived_inputs'] as Map?) ?? {},
-    );
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.speed_rounded, color: Color(0xFF0F766E)),
-              const SizedBox(width: 9),
-              Expanded(
-                child: Text(
-                  'Power estimate from calibration',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-              _StatusChip(
-                icon: Icons.verified_rounded,
-                label: 'Confidence: ${estimate['confidence']}',
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final isWide = constraints.maxWidth >= 720;
-              final width = isWide
-                  ? (constraints.maxWidth - 20) / 3
-                  : constraints.maxWidth;
-              return Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: [
-                  SizedBox(
-                    width: width,
-                    child: _CompactMetric(
-                      icon: Icons.trending_up_rounded,
-                      label: 'Stage 1 gain',
-                      value: _value('stage1_gain_percent', suffix: '%'),
-                    ),
-                  ),
-                  SizedBox(
-                    width: width,
-                    child: _CompactMetric(
-                      icon: Icons.bolt_rounded,
-                      label: 'Estimated HP',
-                      value: _value('estimated_hp_after_stage1', suffix: ' hp'),
-                    ),
-                  ),
-                  SizedBox(
-                    width: width,
-                    child: _CompactMetric(
-                      icon: Icons.category_rounded,
-                      label: 'Potential',
-                      value: _value('potential_class'),
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _StatusChip(
-                icon: Icons.speed_rounded,
-                label: 'RPM: ${derived['rpm'] ?? '-'}',
-              ),
-              _StatusChip(
-                icon: Icons.compress_rounded,
-                label: 'Boost: ${derived['boost_pressure'] ?? '-'} bar',
-              ),
-              _StatusChip(
-                icon: Icons.local_gas_station_rounded,
-                label: 'IQ: ${derived['injection_quantity'] ?? '-'} mg',
-              ),
-              _StatusChip(
-                icon: Icons.air_rounded,
-                label: 'AFR: ${derived['afr'] ?? '-'}',
-              ),
-            ],
-          ),
-          if (estimate['note'] != null) ...[
-            const SizedBox(height: 10),
-            Text(
-              estimate['note'].toString(),
-              style: const TextStyle(
-                color: Color(0xFF64748B),
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
         ],
       ),
     );
@@ -2287,30 +1824,265 @@ class _RecommendationTile extends StatelessWidget {
   }
 }
 
-class _MapBrowser extends StatelessWidget {
+class _CalibrationReportPanel extends StatelessWidget {
+  final Map<String, dynamic> report;
+
+  const _CalibrationReportPanel({required this.report});
+
+  List<dynamic> _list(String key) {
+    final value = report[key];
+    return value is List ? value : const [];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final topChanges = _list('top_changes');
+    final actions = _list('recommended_actions');
+    final checks = _list('validation_checks');
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.assignment_rounded, color: Color(0xFF0F766E)),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Text(
+                  'Tuner Report',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            report['headline']?.toString() ?? 'Analiza calibrarii este gata.',
+            style: const TextStyle(
+              color: Color(0xFF334155),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          if (topChanges.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(
+              'Top modified maps',
+              style: Theme.of(
+                context,
+              ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 8),
+            for (final change in topChanges.take(4))
+              _ReportChangeRow(
+                change: Map<String, dynamic>.from(change as Map),
+              ),
+          ],
+          if (actions.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final action in actions.take(4))
+                  _StatusChip(
+                    icon: Icons.tips_and_updates_rounded,
+                    label:
+                        '${Map<String, dynamic>.from(action as Map)['title'] ?? 'Recommendation'}',
+                  ),
+              ],
+            ),
+          ],
+          if (checks.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            for (final check in checks.take(5))
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(
+                      Icons.check_circle_rounded,
+                      size: 17,
+                      color: Color(0xFF0F766E),
+                    ),
+                    const SizedBox(width: 7),
+                    Expanded(
+                      child: Text(
+                        '$check',
+                        style: const TextStyle(color: Color(0xFF475569)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ReportChangeRow extends StatelessWidget {
+  final Map<String, dynamic> change;
+
+  const _ReportChangeRow({required this.change});
+
+  @override
+  Widget build(BuildContext context) {
+    final zone = change['zone_text']?.toString();
+    final unit = change['unit']?.toString();
+    final delta = change['max_abs_delta'];
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.difference_rounded, color: Color(0xFF0F766E)),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  change['name']?.toString() ?? 'Map',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+                Text(
+                  [
+                    change['category'],
+                    if (zone != null && zone.isNotEmpty) zone,
+                    'max delta $delta${unit == null || unit.isEmpty ? '' : ' $unit'}',
+                  ].where((item) => item != null && '$item'.isNotEmpty).join(' | '),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF64748B),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Text(
+            '${change['changed_percent'] ?? 0}%',
+            style: const TextStyle(
+              color: Color(0xFF0F766E),
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MapBrowser extends StatefulWidget {
   final List<dynamic> items;
 
   const _MapBrowser({required this.items});
 
-  List<Map<String, dynamic>> get sortedItems {
-    final maps = items
+  @override
+  State<_MapBrowser> createState() => _MapBrowserState();
+}
+
+class _MapBrowserState extends State<_MapBrowser> {
+  final searchController = TextEditingController();
+  String categoryFilter = 'all';
+  String sortMode = 'changed';
+  bool changedOnly = false;
+
+  @override
+  void dispose() {
+    searchController.dispose();
+    super.dispose();
+  }
+
+  List<Map<String, dynamic>> get allMaps {
+    return widget.items
         .map((item) => Map<String, dynamic>.from(item as Map))
         .toList();
+  }
+
+  int changedCells(Map<String, dynamic> item) {
+    final diff = Map<String, dynamic>.from((item['diff'] as Map?) ?? {});
+    return ((diff['changed_cells'] as num?) ?? 0).toInt();
+  }
+
+  List<String> get categories {
+    final values = allMaps
+        .map((item) => item['category']?.toString() ?? 'unknown')
+        .toSet()
+        .toList();
+    values.sort();
+    return values;
+  }
+
+  bool matchesSearch(Map<String, dynamic> item, String query) {
+    if (query.isEmpty) return true;
+    final haystack = [
+      item['name'],
+      item['short_name'],
+      item['category'],
+      item['address_hex'],
+      item['data_type'],
+    ].whereType<Object>().join(' ').toLowerCase();
+    return haystack.contains(query);
+  }
+
+  List<Map<String, dynamic>> get visibleItems {
+    final validCategory = categories.contains(categoryFilter)
+        ? categoryFilter
+        : 'all';
+    final query = searchController.text.trim().toLowerCase();
+    final maps = allMaps.where((item) {
+      final category = item['category']?.toString() ?? 'unknown';
+      if (validCategory != 'all' && category != validCategory) return false;
+      if (changedOnly && changedCells(item) == 0) return false;
+      return matchesSearch(item, query);
+    }).toList();
+
     maps.sort((left, right) {
-      final leftDiff = Map<String, dynamic>.from((left['diff'] as Map?) ?? {});
-      final rightDiff = Map<String, dynamic>.from(
-        (right['diff'] as Map?) ?? {},
-      );
-      final leftChanged = ((leftDiff['changed_cells'] as num?) ?? 0).toInt();
-      final rightChanged = ((rightDiff['changed_cells'] as num?) ?? 0).toInt();
-      return rightChanged.compareTo(leftChanged);
+      if (sortMode == 'name') {
+        return (left['name']?.toString() ?? '').compareTo(
+          right['name']?.toString() ?? '',
+        );
+      }
+      if (sortMode == 'category') {
+        final categoryCompare = (left['category']?.toString() ?? '').compareTo(
+          right['category']?.toString() ?? '',
+        );
+        if (categoryCompare != 0) return categoryCompare;
+      }
+      return changedCells(right).compareTo(changedCells(left));
     });
     return maps;
   }
 
   @override
   Widget build(BuildContext context) {
-    final maps = sortedItems;
+    final totalMaps = allMaps.length;
+    final maps = visibleItems;
+    final categoryItems = ['all', ...categories];
+    final selectedCategory = categoryItems.contains(categoryFilter)
+        ? categoryFilter
+        : 'all';
 
     return Container(
       width: double.infinity,
@@ -2337,7 +2109,7 @@ class _MapBrowser extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  '${maps.length} maps',
+                  '${maps.length}/$totalMaps maps',
                   style: const TextStyle(
                     color: Color(0xFF64748B),
                     fontWeight: FontWeight.w700,
@@ -2346,7 +2118,111 @@ class _MapBrowser extends StatelessWidget {
               ],
             ),
           ),
-          for (final item in maps.take(25)) _MapBrowserTile(item: item),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 4, 14, 10),
+            child: Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                SizedBox(
+                  width: 300,
+                  child: TextField(
+                    controller: searchController,
+                    onChanged: (_) => setState(() {}),
+                    decoration: const InputDecoration(
+                      prefixIcon: Icon(Icons.search_rounded),
+                      labelText: 'Search maps',
+                      hintText: 'name, address, category',
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  width: 220,
+                  child: DropdownButtonFormField<String>(
+                    initialValue: selectedCategory,
+                    decoration: const InputDecoration(
+                      prefixIcon: Icon(Icons.category_rounded),
+                      labelText: 'Category',
+                    ),
+                    items: [
+                      for (final category in categoryItems)
+                        DropdownMenuItem(
+                          value: category,
+                          child: Text(
+                            category == 'all' ? 'All categories' : category,
+                          ),
+                        ),
+                    ],
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setState(() {
+                        categoryFilter = value;
+                      });
+                    },
+                  ),
+                ),
+                SizedBox(
+                  width: 190,
+                  child: DropdownButtonFormField<String>(
+                    initialValue: sortMode,
+                    decoration: const InputDecoration(
+                      prefixIcon: Icon(Icons.sort_rounded),
+                      labelText: 'Sort',
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'changed',
+                        child: Text('Most changed'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'category',
+                        child: Text('Category'),
+                      ),
+                      DropdownMenuItem(value: 'name', child: Text('Name')),
+                    ],
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setState(() {
+                        sortMode = value;
+                      });
+                    },
+                  ),
+                ),
+                FilterChip(
+                  selected: changedOnly,
+                  avatar: const Icon(Icons.difference_rounded, size: 18),
+                  label: const Text('Changed only'),
+                  onSelected: (value) {
+                    setState(() {
+                      changedOnly = value;
+                    });
+                  },
+                ),
+              ],
+            ),
+          ),
+          if (maps.isEmpty)
+            const Padding(
+              padding: EdgeInsets.fromLTRB(14, 0, 14, 14),
+              child: _EmptyState(
+                icon: Icons.manage_search_rounded,
+                text: 'Nu exista harti pentru filtrele selectate.',
+              ),
+            )
+          else
+            for (final item in maps.take(40)) _MapBrowserTile(item: item),
+          if (maps.length > 40)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+              child: Text(
+                'Afisate primele 40 rezultate. Foloseste cautarea sau filtrele pentru focus.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: const Color(0xFF64748B),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -2364,6 +2240,40 @@ class _MapBrowserTile extends StatelessWidget {
     final changedCells = ((diff['changed_cells'] as num?) ?? 0).toInt();
     final changedPercent = diff['changed_percent'] ?? 0;
     final hasModified = item['modified_preview'] != null;
+    final shortName = item['short_name']?.toString();
+    final units = item['units'] is List
+        ? (item['units'] as List).map((unit) => unit.toString()).join(', ')
+        : '';
+    final axes = item['axes'] is List ? item['axes'] as List : const [];
+    final axisSummary = axes
+        .take(2)
+        .map((axis) {
+          final axisMap = Map<String, dynamic>.from(axis as Map);
+          final unit = axisMap['unit'] ?? axisMap['label'] ?? 'axis';
+          final min = axisMap['min'];
+          final max = axisMap['max'];
+          if (min == null || max == null) return unit.toString();
+          return '$unit $min-$max';
+        })
+        .join(' / ');
+    final factor = item['factor'];
+    final offset = item['offset'];
+    final hasScale =
+        (factor is num && (factor - 1.0).abs() > 0.0000001) ||
+        (offset is num && offset.abs() > 0.0000001);
+    final metadata =
+        [
+              item['address_hex'],
+              '${item['rows']}x${item['columns']}',
+              item['data_type'],
+              item['category'],
+              if (shortName != null && shortName.isNotEmpty) shortName,
+              if (units.isNotEmpty) units,
+              if (axisSummary.isNotEmpty) axisSummary,
+              if (hasScale) 'scale ${factor ?? '-'}',
+            ]
+            .where((value) => value != null && value.toString().isNotEmpty)
+            .join(' | ');
 
     return ExpansionTile(
       tilePadding: const EdgeInsets.symmetric(horizontal: 14),
@@ -2380,11 +2290,7 @@ class _MapBrowserTile extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         style: const TextStyle(fontWeight: FontWeight.w900),
       ),
-      subtitle: Text(
-        '${item['address_hex']} | ${item['rows']}x${item['columns']} | ${item['data_type']} | ${item['category']}',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
+      subtitle: Text(metadata, maxLines: 1, overflow: TextOverflow.ellipsis),
       trailing: SizedBox(
         width: 76,
         child: Text(
@@ -2400,6 +2306,14 @@ class _MapBrowserTile extends StatelessWidget {
       ),
       children: [
         _MapMetricStrip(item: item, diff: diff),
+        const SizedBox(height: 10),
+        _MapSurfacePreview(
+          title: hasModified ? 'Modified surface' : 'Original surface',
+          rows: hasModified
+              ? item['modified_surface_preview'] ?? item['modified_preview']
+              : item['surface_preview'] ?? item['preview'],
+          deltaRows: item['delta_surface_preview'] ?? item['delta_preview'],
+        ),
         const SizedBox(height: 10),
         _MapPreviewGrid(title: 'Original preview', rows: item['preview']),
         if (hasModified) ...[
@@ -2434,6 +2348,15 @@ class _MapMetricStrip extends StatelessWidget {
     final modifiedSummary = Map<String, dynamic>.from(
       (item['modified_summary'] as Map?) ?? {},
     );
+    final axes = item['axes'] is List ? item['axes'] as List : const [];
+    final affectedZone = item['affected_zone'] is List
+        ? item['affected_zone'] as List
+        : const [];
+    final factor = item['factor'];
+    final offset = item['offset'];
+    final hasScale =
+        (factor is num && (factor - 1.0).abs() > 0.0000001) ||
+        (offset is num && offset.abs() > 0.0000001);
     return Wrap(
       spacing: 8,
       runSpacing: 8,
@@ -2446,6 +2369,21 @@ class _MapMetricStrip extends StatelessWidget {
           icon: Icons.analytics_rounded,
           label: 'Orig mean: ${summary['mean'] ?? '-'}',
         ),
+        if (hasScale)
+          _StatusChip(
+            icon: Icons.straighten_rounded,
+            label: 'Scale: x${factor ?? '-'} + ${offset ?? 0}',
+          ),
+        for (final axis in axes.take(3))
+          _StatusChip(
+            icon: Icons.timeline_rounded,
+            label: _axisChipLabel(Map<String, dynamic>.from(axis as Map)),
+          ),
+        for (final zone in affectedZone.take(3))
+          _StatusChip(
+            icon: Icons.my_location_rounded,
+            label: _zoneChipLabel(Map<String, dynamic>.from(zone as Map)),
+          ),
         if (modifiedSummary.isNotEmpty)
           _StatusChip(
             icon: Icons.compare_arrows_rounded,
@@ -2458,6 +2396,27 @@ class _MapMetricStrip extends StatelessWidget {
           ),
       ],
     );
+  }
+
+  String _axisChipLabel(Map<String, dynamic> axis) {
+    final unit = axis['unit'] ?? axis['label'] ?? 'Axis';
+    final min = axis['min'];
+    final max = axis['max'];
+    final byteOrder = axis['resolved_byte_order'];
+    if (min == null || max == null) {
+      return '$unit';
+    }
+    return '$unit: $min-$max${byteOrder == null ? '' : ' $byteOrder'}';
+  }
+
+  String _zoneChipLabel(Map<String, dynamic> zone) {
+    final label = zone['label'] ?? 'Zone';
+    final min = zone['min'];
+    final max = zone['max'];
+    if (min == null || max == null) {
+      return '$label changed';
+    }
+    return '$label changed: $min-$max';
   }
 }
 
@@ -2880,6 +2839,116 @@ class _StatusChip extends StatelessWidget {
   }
 }
 
+class _CalibrationFilePicker extends StatefulWidget {
+  final String label;
+  final String? fileName;
+  final IconData icon;
+  final bool optional;
+  final bool disabled;
+  final VoidCallback onPressed;
+  final VoidCallback onClear;
+
+  const _CalibrationFilePicker({
+    required this.label,
+    required this.fileName,
+    required this.icon,
+    required this.optional,
+    required this.disabled,
+    required this.onPressed,
+    required this.onClear,
+  });
+
+  @override
+  State<_CalibrationFilePicker> createState() => _CalibrationFilePickerState();
+}
+
+class _CalibrationFilePickerState extends State<_CalibrationFilePicker> {
+  bool hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasFile = widget.fileName != null;
+    final showClear =
+        hasFile && (hovered || MediaQuery.sizeOf(context).width < 720);
+    final borderColor = hasFile
+        ? const Color(0xFF93C5FD)
+        : const Color(0xFFD9E0EC);
+    final backgroundColor = hasFile ? const Color(0xFFF8FBFF) : Colors.white;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => hovered = true),
+      onExit: (_) => setState(() => hovered = false),
+      child: Material(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          onTap: widget.disabled ? null : widget.onPressed,
+          borderRadius: BorderRadius.circular(12),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            height: 56,
+            padding: const EdgeInsets.only(left: 14, right: 6),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: hovered && !widget.disabled
+                    ? Theme.of(context).colorScheme.primary
+                    : borderColor,
+                width: hovered && !widget.disabled ? 1.4 : 1,
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  hasFile ? Icons.check_circle_rounded : widget.icon,
+                  color: hasFile
+                      ? const Color(0xFF0F766E)
+                      : const Color(0xFF334155),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    hasFile
+                        ? widget.fileName!
+                        : '${widget.label}${widget.optional ? ' optional' : ''}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: hasFile
+                          ? const Color(0xFF0F172A)
+                          : const Color(0xFF475569),
+                      fontWeight: hasFile ? FontWeight.w800 : FontWeight.w600,
+                    ),
+                  ),
+                ),
+                if (hasFile)
+                  IgnorePointer(
+                    ignoring: !showClear,
+                    child: AnimatedOpacity(
+                      opacity: showClear ? 1 : 0,
+                      duration: const Duration(milliseconds: 120),
+                      child: IconButton(
+                        tooltip: 'Remove file',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: widget.disabled ? null : widget.onClear,
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+                    ),
+                  )
+                else
+                  const Padding(
+                    padding: EdgeInsets.only(right: 10),
+                    child: Icon(Icons.upload_file_rounded, size: 20),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _PathNote extends StatelessWidget {
   final String path;
 
@@ -2913,42 +2982,219 @@ class _PathNote extends StatelessWidget {
   }
 }
 
-class _ImportedMapNote extends StatelessWidget {
-  final String fileName;
-  final bool isBinary;
+class _MapSurfacePreview extends StatelessWidget {
+  final String title;
+  final dynamic rows;
+  final dynamic deltaRows;
 
-  const _ImportedMapNote({required this.fileName, this.isBinary = false});
+  const _MapSurfacePreview({
+    required this.title,
+    required this.rows,
+    this.deltaRows,
+  });
+
+  List<List<double>> _matrix(dynamic value) {
+    if (value is! List) return const [];
+    return value
+        .whereType<List>()
+        .map(
+          (row) => row
+              .map((cell) => cell is num ? cell.toDouble() : double.nan)
+              .where((cell) => cell.isFinite)
+              .toList(),
+        )
+        .where((row) => row.isNotEmpty)
+        .toList();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.description_rounded, size: 20),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              fileName,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontWeight: FontWeight.w700),
+    final matrix = _matrix(rows);
+    final deltaMatrix = _matrix(deltaRows);
+    if (matrix.length < 2 || matrix.first.length < 2) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.terrain_rounded, size: 18),
+            const SizedBox(width: 7),
+            Text(
+              title,
+              style: const TextStyle(
+                fontWeight: FontWeight.w900,
+                color: Color(0xFF334155),
+              ),
             ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Container(
+          height: 230,
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
           ),
-          const SizedBox(width: 10),
-          _StatusChip(
-            icon: isBinary ? Icons.memory_rounded : Icons.check_circle_rounded,
-            label: isBinary ? 'Binary ECU' : 'Parsed',
+          child: CustomPaint(
+            painter: _SurfacePainter(matrix: matrix, deltaMatrix: deltaMatrix),
           ),
-        ],
-      ),
+        ),
+      ],
     );
+  }
+}
+
+class _SurfacePainter extends CustomPainter {
+  final List<List<double>> matrix;
+  final List<List<double>> deltaMatrix;
+
+  const _SurfacePainter({required this.matrix, required this.deltaMatrix});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rows = matrix.length;
+    final columns = matrix
+        .map((row) => row.length)
+        .reduce((a, b) => a < b ? a : b);
+    if (rows < 2 || columns < 2) return;
+
+    final values = <double>[
+      for (final row in matrix)
+        for (final value in row.take(columns)) value,
+    ]..sort();
+    final lowIndex = (values.length * 0.05).floor().clamp(0, values.length - 1);
+    final highIndex = (values.length * 0.95).floor().clamp(
+      0,
+      values.length - 1,
+    );
+    final lowValue = values[lowIndex];
+    final highValue = values[highIndex];
+    final span = (highValue - lowValue).abs() < 0.000001
+        ? 1.0
+        : highValue - lowValue;
+    final zHeight = (rows + columns) * 0.46;
+
+    double normalizedValue(int row, int column) {
+      final raw = (matrix[row][column] - lowValue) / span;
+      return raw.clamp(0.0, 1.0);
+    }
+
+    Offset logicalProject(int row, int column) {
+      final normalized = normalizedValue(row, column);
+      return Offset(
+        (column - row).toDouble(),
+        (column + row) * 0.52 - normalized * zHeight,
+      );
+    }
+
+    final logical = List.generate(
+      rows,
+      (row) => List.generate(columns, (column) => logicalProject(row, column)),
+    );
+    var minX = logical.first.first.dx;
+    var maxX = logical.first.first.dx;
+    var minY = logical.first.first.dy;
+    var maxY = logical.first.first.dy;
+    for (final row in logical) {
+      for (final point in row) {
+        if (point.dx < minX) minX = point.dx;
+        if (point.dx > maxX) maxX = point.dx;
+        if (point.dy < minY) minY = point.dy;
+        if (point.dy > maxY) maxY = point.dy;
+      }
+    }
+
+    const padding = 18.0;
+    final logicalWidth = (maxX - minX).abs() < 0.000001 ? 1.0 : maxX - minX;
+    final logicalHeight = (maxY - minY).abs() < 0.000001 ? 1.0 : maxY - minY;
+    final scaleX = (size.width - padding * 2) / logicalWidth;
+    final scaleY = (size.height - padding * 2) / logicalHeight;
+    final scale = scaleX < scaleY ? scaleX : scaleY;
+    final drawnWidth = logicalWidth * scale;
+    final drawnHeight = logicalHeight * scale;
+    final offset = Offset(
+      (size.width - drawnWidth) / 2 - minX * scale,
+      (size.height - drawnHeight) / 2 - minY * scale,
+    );
+
+    Offset project(int row, int column) {
+      final point = logical[row][column];
+      return Offset(point.dx * scale + offset.dx, point.dy * scale + offset.dy);
+    }
+
+    final gridPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 0.65
+      ..color = const Color(0x4D334155);
+    final fillPaint = Paint()..style = PaintingStyle.fill;
+    final highlightPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.6
+      ..color = const Color(0xFF0F766E);
+    final shadowPaint = Paint()
+      ..style = PaintingStyle.fill
+      ..color = const Color(0x110F172A);
+
+    final shadow = Path()
+      ..moveTo(project(rows - 1, 0).dx, size.height - padding)
+      ..lineTo(project(rows - 1, columns - 1).dx, size.height - padding)
+      ..lineTo(project(0, columns - 1).dx, size.height - padding * 1.35)
+      ..lineTo(project(0, 0).dx, size.height - padding * 1.35)
+      ..close();
+    canvas.drawPath(shadow, shadowPaint);
+
+    for (var row = rows - 2; row >= 0; row--) {
+      for (var column = 0; column < columns - 1; column++) {
+        final points = [
+          project(row, column),
+          project(row, column + 1),
+          project(row + 1, column + 1),
+          project(row + 1, column),
+        ];
+        final normalized =
+            (normalizedValue(row, column) +
+                normalizedValue(row, column + 1) +
+                normalizedValue(row + 1, column + 1) +
+                normalizedValue(row + 1, column)) /
+            4.0;
+        fillPaint.color = Color.lerp(
+          const Color(0xFFEFF6FF),
+          const Color(0xFF1D4ED8),
+          normalized,
+        )!.withValues(alpha: 0.88);
+
+        final path = Path()..addPolygon(points, true);
+        canvas.drawPath(path, fillPaint);
+        canvas.drawPath(path, gridPaint);
+
+        if (_cellHasDelta(row, column)) {
+          canvas.drawPath(path, highlightPaint);
+        }
+      }
+    }
+  }
+
+  bool _cellHasDelta(int row, int column) {
+    if (deltaMatrix.isEmpty) return false;
+    for (final r in [row, row + 1]) {
+      if (r < 0 || r >= deltaMatrix.length) continue;
+      for (final c in [column, column + 1]) {
+        if (c < 0 || c >= deltaMatrix[r].length) continue;
+        if (deltaMatrix[r][c].abs() > 0.000001) return true;
+      }
+    }
+    return false;
+  }
+
+  @override
+  bool shouldRepaint(covariant _SurfacePainter oldDelegate) {
+    return oldDelegate.matrix != matrix ||
+        oldDelegate.deltaMatrix != deltaMatrix;
   }
 }
 

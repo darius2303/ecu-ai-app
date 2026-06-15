@@ -22,7 +22,7 @@ from fastapi.encoders import jsonable_encoder
 from pathlib import Path
 from fastapi.responses import FileResponse
 from app.services.visualization import generate_fuel_map_heatmap
-from app.services.report_generator import generate_stage1_report
+from app.services.report_generator import generate_calibration_report, generate_stage1_report
 router = APIRouter(prefix="/api")
 
 def _decode_uploaded_file(file: CalibrationUploadedFile, max_size: int) -> bytes:
@@ -67,39 +67,61 @@ def parse_map_file(data: MapFileInput):
 @router.post("/calibration/analyze")
 def calibration_analyze(data: CalibrationAnalyzeInput):
     try:
-        original = read_ecu_binary(
-            data.original_file.file_name,
-            _decode_uploaded_file(data.original_file, max_size=16_000_000),
-        )
-        modified = (
-            read_ecu_binary(
-                data.modified_file.file_name,
-                _decode_uploaded_file(data.modified_file, max_size=16_000_000),
-            )
-            if data.modified_file is not None
-            else None
-        )
-
-        definitions = []
-        warnings: list[str] = []
-        if data.definitions_file is not None:
-            definitions, warnings = parse_map_definitions(
-                data.definitions_file.file_name,
-                _decode_uploaded_file(data.definitions_file, max_size=2_000_000),
-            )
-
-        return analyze_calibration(
-            original=original,
-            modified=modified,
-            definitions=definitions,
-            warnings=warnings,
-            engine_displacement=data.engine_displacement,
-            fuel_type=data.fuel_type,
-            is_turbo=data.is_turbo,
-            stock_hp=data.stock_hp,
-        )
+        return _run_calibration_analysis(data)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+def _run_calibration_analysis(data: CalibrationAnalyzeInput):
+    original = read_ecu_binary(
+        data.original_file.file_name,
+        _decode_uploaded_file(data.original_file, max_size=16_000_000),
+    )
+    modified = (
+        read_ecu_binary(
+            data.modified_file.file_name,
+            _decode_uploaded_file(data.modified_file, max_size=16_000_000),
+        )
+        if data.modified_file is not None
+        else None
+    )
+
+    definitions = []
+    warnings: list[str] = []
+    if data.definitions_file is not None:
+        definitions, warnings = parse_map_definitions(
+            data.definitions_file.file_name,
+            _decode_uploaded_file(data.definitions_file, max_size=2_000_000),
+        )
+
+    return analyze_calibration(
+        original=original,
+        modified=modified,
+        definitions=definitions,
+        warnings=warnings,
+        engine_displacement=data.engine_displacement,
+        fuel_type=data.fuel_type,
+        is_turbo=data.is_turbo,
+        stock_hp=data.stock_hp,
+    )
+
+
+@router.post("/calibration/report")
+def calibration_report(data: CalibrationAnalyzeInput):
+    try:
+        analysis = _run_calibration_analysis(data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    output_dir = Path("generated")
+    output_dir.mkdir(exist_ok=True)
+    pdf_path = output_dir / "calibration_tuner_report.pdf"
+    generate_calibration_report(analysis=analysis, output_path=pdf_path)
+    return FileResponse(
+        path=pdf_path,
+        media_type="application/pdf",
+        filename="calibration_tuner_report.pdf",
+    )
 
 @router.post("/analyze", response_model=ECUResult)
 def analyze_ecu(data: ECUInput):

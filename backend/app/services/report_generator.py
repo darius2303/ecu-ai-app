@@ -216,3 +216,139 @@ def generate_stage1_report(
 
     c.save()
     return output_path
+
+
+def _draw_wrapped_lines(
+    c: canvas.Canvas,
+    lines: list[str],
+    x: float,
+    y: float,
+    width: float,
+    font_size: int = 9,
+):
+    styles = getSampleStyleSheet()
+    style = styles["BodyText"]
+    style.fontName = "Helvetica"
+    style.fontSize = font_size
+    style.leading = font_size + 4
+
+    current_y = y
+    for line in lines:
+        paragraph = Paragraph(line, style)
+        _, height = paragraph.wrap(width, 120)
+        paragraph.drawOn(c, x, current_y - height)
+        current_y -= height + 5
+    return current_y
+
+
+def _page_break_if_needed(c: canvas.Canvas, y: float, minimum: float, height: float) -> float:
+    if y >= minimum:
+        return y
+    c.showPage()
+    return height - 50
+
+
+def generate_calibration_report(
+    analysis: dict,
+    output_path: str | Path,
+) -> str:
+    output_path = str(output_path)
+    c = canvas.Canvas(output_path, pagesize=A4)
+    width, height = A4
+    margin_x = 50
+    content_width = width - 2 * margin_x
+    y = height - 50
+
+    report = analysis.get("report") or {}
+    summary = analysis.get("summary") or {}
+    binary_diff = analysis.get("binary_diff") or {}
+
+    c.setFillColor(colors.HexColor("#0F172A"))
+    c.setFont("Helvetica-Bold", 18)
+    c.drawString(margin_x, y, "ECU Calibration Tuner Report")
+    generated_at = datetime.now().strftime("%d-%m-%Y %H:%M")
+    c.setFont("Helvetica", 9)
+    c.setFillColor(colors.grey)
+    c.drawString(margin_x, y - 18, f"Generated on: {generated_at}")
+    y -= 48
+
+    c.setFillColor(colors.HexColor("#F8FAFC"))
+    c.roundRect(margin_x, y - 54, content_width, 48, 8, stroke=0, fill=1)
+    c.setFillColor(colors.black)
+    y = _draw_summary(
+        c,
+        report.get("headline") or "Calibration analysis completed.",
+        margin_x + 10,
+        y - 14,
+        content_width - 20,
+    )
+    y -= 28
+
+    _draw_section_title(c, "Files and Summary", margin_x, y)
+    y -= 22
+    y = _draw_key_value_block(
+        c,
+        {
+            "Original file": summary.get("original_file"),
+            "Modified file": summary.get("modified_file") or "Not provided",
+            "Maps extracted": summary.get("maps_extracted"),
+            "Maps changed": summary.get("maps_changed"),
+            "Binary changed": f"{binary_diff.get('changed_bytes', 0)} bytes ({binary_diff.get('changed_percent', 0)}%)",
+        },
+        margin_x,
+        y,
+    )
+    y -= 12
+
+    top_changes = report.get("top_changes") or []
+    if top_changes:
+        y = _page_break_if_needed(c, y, 130, height)
+        _draw_section_title(c, "Top Modified Maps", margin_x, y)
+        y -= 22
+        lines = []
+        for item in top_changes[:10]:
+            zone = item.get("zone_text") or "zone unavailable"
+            unit = item.get("unit") or ""
+            lines.append(
+                f"<b>{item.get('name')}</b> [{item.get('category')}]: "
+                f"{item.get('changed_percent')}% changed, max delta {item.get('max_abs_delta')} {unit}. "
+                f"Affected zone: {zone}."
+            )
+        y = _draw_wrapped_lines(c, lines, margin_x, y, content_width)
+        y -= 10
+
+    recommendations = report.get("recommended_actions") or []
+    if recommendations:
+        y = _page_break_if_needed(c, y, 150, height)
+        _draw_section_title(c, "Recommended Actions", margin_x, y)
+        y -= 22
+        lines = []
+        for item in recommendations[:8]:
+            lines.append(
+                f"<b>{item.get('title')}</b> ({item.get('confidence')} confidence, {item.get('risk')} risk): "
+                f"{item.get('suggested_change')}. {item.get('reason')}"
+            )
+        y = _draw_wrapped_lines(c, lines, margin_x, y, content_width)
+        y -= 10
+
+    checks = report.get("validation_checks") or []
+    if checks:
+        y = _page_break_if_needed(c, y, 120, height)
+        _draw_section_title(c, "Validation Checklist", margin_x, y)
+        y -= 22
+        y = _draw_wrapped_lines(
+            c,
+            [f"- {check}" for check in checks[:12]],
+            margin_x,
+            y,
+            content_width,
+        )
+
+    c.setStrokeColor(colors.lightgrey)
+    c.setLineWidth(0.8)
+    c.line(margin_x, 35, width - margin_x, 35)
+    c.setFont("Helvetica-Oblique", 8)
+    c.setFillColor(colors.grey)
+    c.drawString(margin_x, 22, "Generated automatically by the ECU AI Analyzer backend.")
+    c.save()
+    return output_path

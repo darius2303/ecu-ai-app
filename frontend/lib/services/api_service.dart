@@ -55,6 +55,56 @@ class ApiService {
     );
   }
 
+  Future<Uint8List> calibrationReport({
+    required String originalFileName,
+    required Uint8List originalBytes,
+    String? modifiedFileName,
+    Uint8List? modifiedBytes,
+    String? definitionsFileName,
+    Uint8List? definitionsBytes,
+    double? engineDisplacement,
+    required String fuelType,
+    required bool isTurbo,
+    double? stockHp,
+  }) async {
+    final body = <String, dynamic>{
+      'original_file': {
+        'file_name': originalFileName,
+        'content_base64': base64Encode(originalBytes),
+      },
+      'engine_displacement': engineDisplacement,
+      'fuel_type': fuelType,
+      'is_turbo': isTurbo,
+      'stock_hp': stockHp,
+    };
+
+    if (modifiedFileName != null && modifiedBytes != null) {
+      body['modified_file'] = {
+        'file_name': modifiedFileName,
+        'content_base64': base64Encode(modifiedBytes),
+      };
+    }
+    if (definitionsFileName != null && definitionsBytes != null) {
+      body['definitions_file'] = {
+        'file_name': definitionsFileName,
+        'content_base64': base64Encode(definitionsBytes),
+      };
+    }
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/calibration/report'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(body),
+    );
+
+    if (response.statusCode == 200) {
+      return response.bodyBytes;
+    }
+    throw Exception(
+      'Calibration report failed: ${response.statusCode} ${response.body}',
+    );
+  }
+
   Future<Map<String, dynamic>> parseMapFile({
     required String fileName,
     required Uint8List bytes,
