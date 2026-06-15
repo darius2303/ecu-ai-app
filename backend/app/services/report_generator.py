@@ -284,6 +284,19 @@ def generate_calibration_report(
     )
     y -= 28
 
+    tuner_summary = report.get("tuner_summary") or []
+    if tuner_summary:
+        _draw_section_title(c, "Tuner Summary", margin_x, y)
+        y -= 22
+        y = _draw_wrapped_lines(
+            c,
+            [f"- {line}" for line in tuner_summary[:4]],
+            margin_x,
+            y,
+            content_width,
+        )
+        y -= 10
+
     _draw_section_title(c, "Files and Summary", margin_x, y)
     y -= 22
     y = _draw_key_value_block(
@@ -324,9 +337,13 @@ def generate_calibration_report(
         y -= 22
         lines = []
         for item in recommendations[:8]:
+            actions = "; ".join(str(action) for action in (item.get("actions") or [])[:2])
+            risks = "; ".join(str(risk) for risk in (item.get("risks") or [])[:2])
             lines.append(
-                f"<b>{item.get('title')}</b> ({item.get('confidence')} confidence, {item.get('risk')} risk): "
-                f"{item.get('suggested_change')}. {item.get('reason')}"
+                f"<b>{item.get('title')}</b> ({item.get('priority', 'medium')} priority, "
+                f"{item.get('confidence')} confidence, {item.get('risk')} risk): "
+                f"{item.get('suggested_change')}. {item.get('reason')} "
+                f"Actions: {actions or '-'}. Risks: {risks or '-'}."
             )
         y = _draw_wrapped_lines(c, lines, margin_x, y, content_width)
         y -= 10

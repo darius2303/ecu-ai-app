@@ -172,6 +172,95 @@ def _zone_text(zones: list[dict[str, Any]]) -> str:
     return ", ".join(parts)
 
 
+def _unique_preserve_order(values: list[str], limit: int) -> list[str]:
+    seen: set[str] = set()
+    unique: list[str] = []
+    for value in values:
+        normalized = value.strip()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        unique.append(normalized)
+        if len(unique) >= limit:
+            break
+    return unique
+
+
+def _build_tuner_summary(
+    recommendations: list[dict[str, Any]],
+    changed_maps: list[dict[str, Any]],
+    binary_diff: dict[str, Any] | None,
+) -> list[str]:
+    summary: list[str] = []
+    changed_categories = _unique_preserve_order(
+        [
+            str(item.get("category") or "unknown")
+            for item in sorted(
+                changed_maps,
+                key=lambda item: (item.get("diff") or {}).get("changed_percent", 0),
+                reverse=True,
+            )
+        ],
+        limit=4,
+    )
+
+    if changed_categories:
+        summary.append(
+            "Modificarile sunt concentrate in: " + ", ".join(changed_categories) + "."
+        )
+    elif binary_diff:
+        summary.append(
+            "Exista diferente binare, dar nu au fost legate clar de hartile definite."
+        )
+    else:
+        summary.append(
+            "Analiza este in modul original-only; recomandarile sunt un plan de investigatie."
+        )
+
+    high_priority = [
+        item for item in recommendations
+        if str(item.get("priority") or "").lower() == "high"
+    ]
+    if high_priority:
+        summary.append(
+            "Prioritate ridicata: "
+            + ", ".join(
+                _unique_preserve_order(
+                    [str(item.get("title") or "Recommendation") for item in high_priority],
+                    limit=3,
+                )
+            )
+            + "."
+        )
+
+    supporting = [
+        item for item in recommendations
+        if item.get("mode") == "review_supporting_map"
+    ]
+    if supporting:
+        summary.append(
+            "Harti suport de verificat: "
+            + ", ".join(
+                _unique_preserve_order(
+                    [str(item.get("title") or "Supporting map") for item in supporting],
+                    limit=3,
+                )
+            )
+            + "."
+        )
+
+    limiter_changes = [
+        item for item in changed_maps
+        if str(item.get("category") or "") == "limiter"
+    ]
+    if limiter_changes:
+        summary.append(
+            "Limiterele sunt modificate; verifica daca schimbarile sunt intentionate si pastreaza protectiile necesare."
+        )
+
+    return summary[:4]
+
+
 def _build_calibration_report(
     summary: dict[str, Any],
     binary_diff: dict[str, Any] | None,
@@ -186,7 +275,17 @@ def _build_calibration_report(
         reverse=True,
     )
     top_changes: list[dict[str, Any]] = []
-    for item in changed_sorted[:8]:
+    seen_changes: set[tuple[str, str]] = set()
+    for item in changed_sorted:
+        if len(top_changes) >= 8:
+            break
+        change_key = (
+            str(item.get("name") or ""),
+            str(item.get("address_hex") or ""),
+        )
+        if change_key in seen_changes:
+            continue
+        seen_changes.add(change_key)
         diff = item.get("diff") or {}
         zones = item.get("affected_zone") or []
         top_changes.append(
@@ -228,6 +327,11 @@ def _build_calibration_report(
             "definitions_count": summary.get("definitions_count", 0),
             "binary_changed_percent": binary_diff.get("changed_percent", 0) if binary_diff else 0,
         },
+        "tuner_summary": _build_tuner_summary(
+            recommendations=recommendations,
+            changed_maps=changed_maps,
+            binary_diff=binary_diff,
+        ),
         "top_changes": top_changes,
         "key_findings": findings[:6],
         "recommended_actions": recommendations[:6],
@@ -289,6 +393,8 @@ def analyze_calibration(
     recommendations = generate_power_recommendations(
         map_results=map_results,
         has_modified=modified is not None,
+        fuel_type=fuel_type,
+        is_turbo=is_turbo,
     )
     power_estimate = estimate_power_from_calibration(
         map_results,

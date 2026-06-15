@@ -101,7 +101,6 @@ class _HomePageState extends State<HomePage> {
   bool loadingCalibrationAnalyze = false;
   bool loadingAnalyze = false;
   bool loadingFuelMap = false;
-  bool loadingHeatmap = false;
   bool loadingReport = false;
 
   String? errorMessage;
@@ -124,7 +123,6 @@ class _HomePageState extends State<HomePage> {
   String? selectedMapFileName;
   String? selectedBinaryEcuFileName;
   Uint8List? selectedBinaryEcuBytes;
-  Uint8List? heatmapBytes;
   String? savedPdfPath;
   int mobileTabIndex = 0;
 
@@ -244,7 +242,6 @@ class _HomePageState extends State<HomePage> {
   void clearCalibrationOutputs() {
     calibrationResult = null;
     calibrationError = null;
-    heatmapBytes = null;
     savedPdfPath = null;
     stage1GainPercent = null;
     potentialClass = null;
@@ -386,7 +383,6 @@ class _HomePageState extends State<HomePage> {
           estimatedHpAfterStage1 = null;
           fuelMapResult = null;
           calibrationResult = null;
-          heatmapBytes = null;
           savedPdfPath = null;
         });
 
@@ -407,7 +403,6 @@ class _HomePageState extends State<HomePage> {
           estimatedHpAfterStage1 = null;
           fuelMapResult = null;
           calibrationResult = null;
-          heatmapBytes = null;
           savedPdfPath = null;
         });
       }
@@ -539,78 +534,6 @@ class _HomePageState extends State<HomePage> {
     } finally {
       setState(() {
         loadingFuelMap = false;
-      });
-    }
-  }
-
-  Future<void> viewHeatmap() async {
-    FocusScope.of(context).unfocus();
-
-    setState(() {
-      loadingHeatmap = true;
-      errorMessage = null;
-    });
-
-    try {
-      final bytes = await api.fuelMapImage(buildInputData());
-
-      setState(() {
-        heatmapBytes = bytes;
-      });
-
-      if (!mounted) return;
-      showDialog(
-        context: context,
-        builder: (context) => Dialog(
-          insetPadding: const EdgeInsets.all(24),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 920, maxHeight: 720),
-            child: Padding(
-              padding: const EdgeInsets.all(18),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.grid_on_rounded),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          'Fuel Map Heatmap',
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: 'Inchide',
-                        onPressed: () => Navigator.of(context).pop(),
-                        icon: const Icon(Icons.close),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  Expanded(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: InteractiveViewer(
-                        child: Image.memory(bytes, fit: BoxFit.contain),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
-    } catch (e) {
-      setState(() {
-        errorMessage = 'Eroare la generarea heatmap-ului: $e';
-      });
-    } finally {
-      setState(() {
-        loadingHeatmap = false;
       });
     }
   }
@@ -1087,7 +1010,7 @@ class _HomePageState extends State<HomePage> {
               },
             ),
           ],
-          if (derivedFeatures != null) ...[
+          if (derivedFeatures != null && calibrationResult == null) ...[
             const SizedBox(height: 14),
             _DerivedMapSummary(features: derivedFeatures!),
           ],
@@ -1207,17 +1130,11 @@ class _HomePageState extends State<HomePage> {
     return _SectionPanel(
       icon: Icons.file_download_done_rounded,
       title: 'Output',
-      subtitle: 'Export raport PDF si vizualizare harti in browser.',
+      subtitle: 'Exporta raportul PDF pentru analiza calibrarii.',
       child: Wrap(
         spacing: 10,
         runSpacing: 10,
         children: [
-          buildActionButton(
-            label: 'View Heatmap (2D)',
-            icon: Icons.grid_on_rounded,
-            onPressed: viewHeatmap,
-            isLoading: loadingHeatmap,
-          ),
           buildActionButton(
             label: 'Export PDF Report',
             icon: Icons.picture_as_pdf_rounded,
@@ -1410,7 +1327,6 @@ class _HomePageState extends State<HomePage> {
         loadingCalibrationAnalyze ||
         loadingAnalyze ||
         loadingFuelMap ||
-        loadingHeatmap ||
         loadingReport;
     final isMobile = MediaQuery.sizeOf(context).width < _mobileBreakpoint;
 
@@ -1718,6 +1634,16 @@ class _RecommendationTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final maps = item['maps'] is List ? (item['maps'] as List) : const [];
+    final observations = item['observations'] is List
+        ? (item['observations'] as List)
+        : const [];
+    final actions = item['actions'] is List
+        ? (item['actions'] as List)
+        : const [];
+    final benefits = item['benefits'] is List
+        ? (item['benefits'] as List)
+        : const [];
+    final risks = item['risks'] is List ? (item['risks'] as List) : const [];
     final checks = item['checks'] is List ? (item['checks'] as List) : const [];
 
     return Container(
@@ -1768,6 +1694,21 @@ class _RecommendationTile extends StatelessWidget {
                 icon: Icons.trending_up_rounded,
                 label: '${item['suggested_change']}',
               ),
+              if (item['mode_label'] != null)
+                _StatusChip(
+                  icon: Icons.route_rounded,
+                  label: '${item['mode_label']}',
+                ),
+              if (item['priority'] != null)
+                _StatusChip(
+                  icon: Icons.priority_high_rounded,
+                  label: 'Priority: ${item['priority']}',
+                ),
+              if (item['benefit_level'] != null)
+                _StatusChip(
+                  icon: Icons.bolt_rounded,
+                  label: 'Benefit: ${item['benefit_level']}',
+                ),
               _StatusChip(
                 icon: Icons.location_searching_rounded,
                 label: '${item['target_zone']}',
@@ -1782,6 +1723,64 @@ class _RecommendationTile extends StatelessWidget {
               ),
             ],
           ),
+          if (observations.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            _RecommendationSection(
+              title: 'Observatii',
+              icon: Icons.visibility_rounded,
+              items: observations,
+              color: const Color(0xFF2563EB),
+            ),
+          ],
+          if (actions.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _RecommendationSection(
+              title: 'Actiuni recomandate',
+              icon: Icons.build_circle_rounded,
+              items: actions,
+              color: const Color(0xFF0F766E),
+            ),
+          ],
+          if (benefits.isNotEmpty || risks.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final isWide = constraints.maxWidth >= 620;
+                return Wrap(
+                  spacing: 10,
+                  runSpacing: 8,
+                  children: [
+                    if (benefits.isNotEmpty)
+                      SizedBox(
+                        width: isWide
+                            ? (constraints.maxWidth - 10) / 2
+                            : constraints.maxWidth,
+                        child: _RecommendationSection(
+                          title: 'Beneficii',
+                          icon: Icons.add_chart_rounded,
+                          items: benefits,
+                          color: const Color(0xFF0F766E),
+                          maxItems: 2,
+                        ),
+                      ),
+                    if (risks.isNotEmpty)
+                      SizedBox(
+                        width: isWide
+                            ? (constraints.maxWidth - 10) / 2
+                            : constraints.maxWidth,
+                        child: _RecommendationSection(
+                          title: 'Riscuri',
+                          icon: Icons.warning_amber_rounded,
+                          items: risks,
+                          color: const Color(0xFFB45309),
+                          maxItems: 2,
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
+          ],
           if (maps.isNotEmpty) ...[
             const SizedBox(height: 8),
             Text(
@@ -1796,30 +1795,118 @@ class _RecommendationTile extends StatelessWidget {
           ],
           if (checks.isNotEmpty) ...[
             const SizedBox(height: 8),
-            for (final check in checks.take(3))
-              Padding(
-                padding: const EdgeInsets.only(bottom: 3),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(
-                      Icons.check_rounded,
-                      size: 16,
-                      color: Color(0xFF0F766E),
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        '$check',
-                        style: const TextStyle(color: Color(0xFF475569)),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            _AlignedBulletList(
+              items: checks.take(3).toList(),
+              color: const Color(0xFF0F766E),
+              icon: Icons.check_rounded,
+            ),
           ],
         ],
       ),
+    );
+  }
+}
+
+class _RecommendationSection extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final List<dynamic> items;
+  final Color color;
+  final int maxItems;
+
+  const _RecommendationSection({
+    required this.title,
+    required this.icon,
+    required this.items,
+    required this.color,
+    this.maxItems = 3,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.045),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.13)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 17, color: color),
+              const SizedBox(width: 7),
+              Text(
+                title,
+                style: TextStyle(color: color, fontWeight: FontWeight.w900),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          _AlignedBulletList(
+            items: items.take(maxItems).toList(),
+            color: color,
+            icon: Icons.circle,
+            compact: true,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AlignedBulletList extends StatelessWidget {
+  final List<dynamic> items;
+  final Color color;
+  final IconData icon;
+  final bool compact;
+
+  const _AlignedBulletList({
+    required this.items,
+    required this.color,
+    this.icon = Icons.circle,
+    this.compact = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final item in items)
+          Padding(
+            padding: EdgeInsets.only(bottom: compact ? 3 : 6),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 18,
+                  height: 20,
+                  child: Align(
+                    alignment: const Alignment(0, -0.15),
+                    child: Icon(
+                      icon,
+                      size: icon == Icons.circle ? 6 : 16,
+                      color: color,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    '$item',
+                    style: const TextStyle(
+                      color: Color(0xFF475569),
+                      height: 1.35,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 }
@@ -1837,8 +1924,8 @@ class _CalibrationReportPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final topChanges = _list('top_changes');
-    final actions = _list('recommended_actions');
     final checks = _list('validation_checks');
+    final tunerSummary = _list('tuner_summary');
 
     return Container(
       width: double.infinity,
@@ -1873,6 +1960,47 @@ class _CalibrationReportPanel extends StatelessWidget {
               fontWeight: FontWeight.w700,
             ),
           ),
+          if (tunerSummary.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEFF6FF),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFBFDBFE)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(
+                        Icons.summarize_rounded,
+                        size: 18,
+                        color: Color(0xFF1D4ED8),
+                      ),
+                      SizedBox(width: 7),
+                      Text(
+                        'Tuner summary',
+                        style: TextStyle(
+                          color: Color(0xFF1D4ED8),
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 7),
+                  _AlignedBulletList(
+                    items: tunerSummary.take(4).toList(),
+                    color: const Color(0xFF1D4ED8),
+                    icon: Icons.circle,
+                    compact: true,
+                  ),
+                ],
+              ),
+            ),
+          ],
           if (topChanges.isNotEmpty) ...[
             const SizedBox(height: 12),
             Text(
@@ -1887,44 +2015,13 @@ class _CalibrationReportPanel extends StatelessWidget {
                 change: Map<String, dynamic>.from(change as Map),
               ),
           ],
-          if (actions.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final action in actions.take(4))
-                  _StatusChip(
-                    icon: Icons.tips_and_updates_rounded,
-                    label:
-                        '${Map<String, dynamic>.from(action as Map)['title'] ?? 'Recommendation'}',
-                  ),
-              ],
-            ),
-          ],
           if (checks.isNotEmpty) ...[
             const SizedBox(height: 12),
-            for (final check in checks.take(5))
-              Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(
-                      Icons.check_circle_rounded,
-                      size: 17,
-                      color: Color(0xFF0F766E),
-                    ),
-                    const SizedBox(width: 7),
-                    Expanded(
-                      child: Text(
-                        '$check',
-                        style: const TextStyle(color: Color(0xFF475569)),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            _AlignedBulletList(
+              items: checks.take(5).toList(),
+              color: const Color(0xFF0F766E),
+              icon: Icons.check_circle_rounded,
+            ),
           ],
         ],
       ),
@@ -2091,139 +2188,150 @@ class _MapBrowserState extends State<_MapBrowser> {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
-            child: Row(
-              children: [
-                const Icon(Icons.view_list_rounded, size: 20),
-                const SizedBox(width: 9),
-                Expanded(
-                  child: Text(
-                    'Map Browser',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ),
-                Text(
-                  '${maps.length}/$totalMaps maps',
-                  style: const TextStyle(
-                    color: Color(0xFF64748B),
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          initiallyExpanded: false,
+          tilePadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+          childrenPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.view_list_rounded, size: 20),
+          title: Text(
+            'Map Browser',
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+          ),
+          subtitle: Text(
+            'Cautare, filtre si preview 3D pentru hartile extrase.',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: const Color(0xFF64748B),
+              fontWeight: FontWeight.w600,
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 4, 14, 10),
-            child: Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                SizedBox(
-                  width: 300,
-                  child: TextField(
-                    controller: searchController,
-                    onChanged: (_) => setState(() {}),
-                    decoration: const InputDecoration(
-                      prefixIcon: Icon(Icons.search_rounded),
-                      labelText: 'Search maps',
-                      hintText: 'name, address, category',
-                    ),
-                  ),
-                ),
-                SizedBox(
-                  width: 220,
-                  child: DropdownButtonFormField<String>(
-                    initialValue: selectedCategory,
-                    decoration: const InputDecoration(
-                      prefixIcon: Icon(Icons.category_rounded),
-                      labelText: 'Category',
-                    ),
-                    items: [
-                      for (final category in categoryItems)
-                        DropdownMenuItem(
-                          value: category,
-                          child: Text(
-                            category == 'all' ? 'All categories' : category,
-                          ),
-                        ),
-                    ],
-                    onChanged: (value) {
-                      if (value == null) return;
-                      setState(() {
-                        categoryFilter = value;
-                      });
-                    },
-                  ),
-                ),
-                SizedBox(
-                  width: 190,
-                  child: DropdownButtonFormField<String>(
-                    initialValue: sortMode,
-                    decoration: const InputDecoration(
-                      prefixIcon: Icon(Icons.sort_rounded),
-                      labelText: 'Sort',
-                    ),
-                    items: const [
-                      DropdownMenuItem(
-                        value: 'changed',
-                        child: Text('Most changed'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'category',
-                        child: Text('Category'),
-                      ),
-                      DropdownMenuItem(value: 'name', child: Text('Name')),
-                    ],
-                    onChanged: (value) {
-                      if (value == null) return;
-                      setState(() {
-                        sortMode = value;
-                      });
-                    },
-                  ),
-                ),
-                FilterChip(
-                  selected: changedOnly,
-                  avatar: const Icon(Icons.difference_rounded, size: 18),
-                  label: const Text('Changed only'),
-                  onSelected: (value) {
-                    setState(() {
-                      changedOnly = value;
-                    });
-                  },
-                ),
-              ],
-            ),
-          ),
-          if (maps.isEmpty)
-            const Padding(
-              padding: EdgeInsets.fromLTRB(14, 0, 14, 14),
-              child: _EmptyState(
-                icon: Icons.manage_search_rounded,
-                text: 'Nu exista harti pentru filtrele selectate.',
-              ),
-            )
-          else
-            for (final item in maps.take(40)) _MapBrowserTile(item: item),
-          if (maps.length > 40)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-              child: Text(
-                'Afisate primele 40 rezultate. Foloseste cautarea sau filtrele pentru focus.',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: const Color(0xFF64748B),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '${maps.length}/$totalMaps maps',
+                style: const TextStyle(
+                  color: Color(0xFF64748B),
                   fontWeight: FontWeight.w700,
                 ),
               ),
+              const SizedBox(width: 8),
+              const Icon(Icons.expand_more_rounded),
+            ],
+          ),
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 4, 14, 10),
+              child: Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  SizedBox(
+                    width: 300,
+                    child: TextField(
+                      controller: searchController,
+                      onChanged: (_) => setState(() {}),
+                      decoration: const InputDecoration(
+                        prefixIcon: Icon(Icons.search_rounded),
+                        labelText: 'Search maps',
+                        hintText: 'name, address, category',
+                      ),
+                    ),
+                  ),
+                  SizedBox(
+                    width: 220,
+                    child: DropdownButtonFormField<String>(
+                      initialValue: selectedCategory,
+                      decoration: const InputDecoration(
+                        prefixIcon: Icon(Icons.category_rounded),
+                        labelText: 'Category',
+                      ),
+                      items: [
+                        for (final category in categoryItems)
+                          DropdownMenuItem(
+                            value: category,
+                            child: Text(
+                              category == 'all' ? 'All categories' : category,
+                            ),
+                          ),
+                      ],
+                      onChanged: (value) {
+                        if (value == null) return;
+                        setState(() {
+                          categoryFilter = value;
+                        });
+                      },
+                    ),
+                  ),
+                  SizedBox(
+                    width: 190,
+                    child: DropdownButtonFormField<String>(
+                      initialValue: sortMode,
+                      decoration: const InputDecoration(
+                        prefixIcon: Icon(Icons.sort_rounded),
+                        labelText: 'Sort',
+                      ),
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'changed',
+                          child: Text('Most changed'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'category',
+                          child: Text('Category'),
+                        ),
+                        DropdownMenuItem(value: 'name', child: Text('Name')),
+                      ],
+                      onChanged: (value) {
+                        if (value == null) return;
+                        setState(() {
+                          sortMode = value;
+                        });
+                      },
+                    ),
+                  ),
+                  FilterChip(
+                    selected: changedOnly,
+                    avatar: const Icon(Icons.difference_rounded, size: 18),
+                    label: const Text('Changed only'),
+                    onSelected: (value) {
+                      setState(() {
+                        changedOnly = value;
+                      });
+                    },
+                  ),
+                ],
+              ),
             ),
-        ],
+            if (maps.isEmpty)
+              const Padding(
+                padding: EdgeInsets.fromLTRB(14, 0, 14, 14),
+                child: _EmptyState(
+                  icon: Icons.manage_search_rounded,
+                  text: 'Nu exista harti pentru filtrele selectate.',
+                ),
+              )
+            else
+              for (final item in maps.take(40)) _MapBrowserTile(item: item),
+            if (maps.length > 40)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+                child: Text(
+                  'Afisate primele 40 rezultate. Foloseste cautarea sau filtrele pentru focus.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: const Color(0xFF64748B),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -2434,6 +2542,14 @@ class _MapPreviewGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tableRows = rows is List ? rows!.cast<dynamic>() : <dynamic>[];
+    var columnCount = 0;
+    for (final row in tableRows) {
+      if (row is List && row.length > columnCount) {
+        columnCount = row.length;
+      }
+    }
+    final calculatedWidth = columnCount * _MapValueCell.cellWidth;
+    final gridMinWidth = calculatedWidth < 116.0 ? 116.0 : calculatedWidth;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2446,30 +2562,51 @@ class _MapPreviewGrid extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 6),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Container(
-            decoration: BoxDecoration(
-              border: Border.all(color: const Color(0xFFE2E8F0)),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final viewportWidth = constraints.maxWidth.isFinite
+                ? constraints.maxWidth
+                : gridMinWidth;
+            return ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              color: Colors.white,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (final row in tableRows)
-                  Row(
-                    children: [
-                      for (final value in (row is List ? row : const []))
-                        _MapValueCell(
-                          value: value,
-                          highlightDelta: highlightDelta,
+              child: SizedBox(
+                width: viewportWidth,
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  clipBehavior: Clip.hardEdge,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minWidth: gridMinWidth + 4),
+                    child: IntrinsicWidth(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                          borderRadius: BorderRadius.circular(8),
+                          color: Colors.white,
                         ),
-                    ],
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            for (final row in tableRows)
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  for (final value
+                                      in (row is List ? row : const []))
+                                    _MapValueCell(
+                                      value: value,
+                                      highlightDelta: highlightDelta,
+                                    ),
+                                ],
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
-              ],
-            ),
-          ),
+                ),
+              ),
+            );
+          },
         ),
       ],
     );
@@ -2477,6 +2614,8 @@ class _MapPreviewGrid extends StatelessWidget {
 }
 
 class _MapValueCell extends StatelessWidget {
+  static const double cellWidth = 76;
+
   final dynamic value;
   final bool highlightDelta;
 
@@ -2495,7 +2634,7 @@ class _MapValueCell extends StatelessWidget {
         : const Color(0xFFFFF1F2);
 
     return Container(
-      width: 76,
+      width: cellWidth,
       height: 34,
       alignment: Alignment.centerRight,
       padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -3040,11 +3179,76 @@ class _MapSurfacePreview extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: const Color(0xFFE2E8F0)),
           ),
-          child: CustomPaint(
-            painter: _SurfacePainter(matrix: matrix, deltaMatrix: deltaMatrix),
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: _SurfacePainter(
+                    matrix: matrix,
+                    deltaMatrix: deltaMatrix,
+                  ),
+                ),
+              ),
+              const Positioned(left: 12, bottom: 10, child: _SurfaceLegend()),
+            ],
           ),
         ),
       ],
+    );
+  }
+}
+
+class _SurfaceLegend extends StatelessWidget {
+  const _SurfaceLegend();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.88),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Low',
+              style: TextStyle(
+                color: Color(0xFF64748B),
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Container(
+              width: 78,
+              height: 8,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(999),
+                gradient: const LinearGradient(
+                  colors: [
+                    Color(0xFF38BDF8),
+                    Color(0xFFFACC15),
+                    Color(0xFFDC2626),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+            const Text(
+              'Peak',
+              style: TextStyle(
+                color: Color(0xFF64748B),
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -3162,11 +3366,7 @@ class _SurfacePainter extends CustomPainter {
                 normalizedValue(row + 1, column + 1) +
                 normalizedValue(row + 1, column)) /
             4.0;
-        fillPaint.color = Color.lerp(
-          const Color(0xFFEFF6FF),
-          const Color(0xFF1D4ED8),
-          normalized,
-        )!.withValues(alpha: 0.88);
+        fillPaint.color = _surfaceColor(normalized).withValues(alpha: 0.9);
 
         final path = Path()..addPolygon(points, true);
         canvas.drawPath(path, fillPaint);
@@ -3177,6 +3377,21 @@ class _SurfacePainter extends CustomPainter {
         }
       }
     }
+  }
+
+  Color _surfaceColor(double normalized) {
+    if (normalized < 0.5) {
+      return Color.lerp(
+        const Color(0xFF38BDF8),
+        const Color(0xFFFACC15),
+        normalized / 0.5,
+      )!;
+    }
+    return Color.lerp(
+      const Color(0xFFFACC15),
+      const Color(0xFFDC2626),
+      (normalized - 0.5) / 0.5,
+    )!;
   }
 
   bool _cellHasDelta(int row, int column) {
