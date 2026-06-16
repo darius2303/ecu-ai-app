@@ -86,14 +86,14 @@ def _finding_for_map(map_result: dict[str, Any]) -> dict[str, Any] | None:
         severity = "medium"
 
     messages = {
-        "torque": "Limiter/cerere de cuplu modificata; verifica coerenta cu smoke, boost si protectiile de transmisie.",
-        "boost": "Harta de boost modificata; verifica limiterele de presiune si controlul turbo.",
-        "air_fuel": "Harta aer/combustibil modificata; verifica fum/lambda si temperaturile de evacuare.",
-        "fuel": "Harta de combustibil sau durata injectiei modificata; verifica rail pressure si SOI.",
-        "timing": "Timing/SOI modificat; verifica zgomot, EGT si presiune cilindru.",
-        "rail_pressure": "Rail pressure modificat; verifica limitele pompei si injectoarelor.",
-        "limiter": "Limiter modificat; verifica daca schimbarea pastreaza protectiile mecanice si termice.",
-        "unknown": "Harta modificata, dar categoria nu a fost identificata din nume.",
+        "torque": "Torque request/limiter changed; check coherence with air/fuel strategy and drivetrain protections.",
+        "boost": "Boost map changed; check pressure limiters and turbo control.",
+        "air_fuel": "Air/fuel map changed; check lambda, smoke and exhaust temperatures.",
+        "fuel": "Fuel quantity or injection duration changed; check rail pressure and SOI.",
+        "timing": "Timing/SOI changed; check noise, EGT and cylinder pressure.",
+        "rail_pressure": "Rail pressure changed; check pump and injector limits.",
+        "limiter": "Limiter changed; verify that mechanical and thermal protections remain valid.",
+        "unknown": "Map changed, but the category could not be identified from its name.",
     }
 
     return {
@@ -206,15 +206,15 @@ def _build_tuner_summary(
 
     if changed_categories:
         summary.append(
-            "Modificarile sunt concentrate in: " + ", ".join(changed_categories) + "."
+            "Changes are concentrated in: " + ", ".join(changed_categories) + "."
         )
     elif binary_diff:
         summary.append(
-            "Exista diferente binare, dar nu au fost legate clar de hartile definite."
+            "Binary differences exist, but they could not be clearly linked to defined maps."
         )
     else:
         summary.append(
-            "Analiza este in modul original-only; recomandarile sunt un plan de investigatie."
+            "Analysis is running in original-only mode; recommendations are an investigation plan."
         )
 
     high_priority = [
@@ -223,7 +223,7 @@ def _build_tuner_summary(
     ]
     if high_priority:
         summary.append(
-            "Prioritate ridicata: "
+            "High priority: "
             + ", ".join(
                 _unique_preserve_order(
                     [str(item.get("title") or "Recommendation") for item in high_priority],
@@ -239,7 +239,7 @@ def _build_tuner_summary(
     ]
     if supporting:
         summary.append(
-            "Harti suport de verificat: "
+            "Supporting maps to review: "
             + ", ".join(
                 _unique_preserve_order(
                     [str(item.get("title") or "Supporting map") for item in supporting],
@@ -255,7 +255,7 @@ def _build_tuner_summary(
     ]
     if limiter_changes:
         summary.append(
-            "Limiterele sunt modificate; verifica daca schimbarile sunt intentionate si pastreaza protectiile necesare."
+            "Limiters are modified; verify that the changes are intentional and keep the required protections."
         )
 
     return summary[:4]
@@ -303,19 +303,19 @@ def _build_calibration_report(
         )
 
     validation_checks = [
-        "Compara logurile reale cu zonele RPM/load modificate.",
-        "Verifica EGT, AFR/lambda si knock/noise acolo unde hartile de fuel/timing/air sunt afectate.",
-        "Pastreaza limiterele mecanice si termice daca nu exista validare hardware.",
+        "Compare real logs against the modified RPM/load zones.",
+        "Check EGT, AFR/lambda and knock/noise where fuel, timing or air maps are affected.",
+        "Keep mechanical and thermal limiters unless hardware validation proves otherwise.",
     ]
     for recommendation in recommendations[:4]:
         for check in recommendation.get("checks") or []:
             if check not in validation_checks:
                 validation_checks.append(str(check))
 
-    headline = "Analiza calibrarii este gata."
+    headline = "Calibration analysis completed."
     if binary_diff:
         headline = (
-            f"{binary_diff.get('changed_bytes', 0)} bytes schimbati "
+            f"{binary_diff.get('changed_bytes', 0)} bytes changed "
             f"({binary_diff.get('changed_percent', 0)}%)."
         )
 
@@ -364,7 +364,7 @@ def analyze_calibration(
             result = map_payload(definition, original_values)
             result["axes"] = axes_payload(original.content, definition)
         except ValueError as exc:
-            warnings.append(f"Harta {definition.name} a fost ignorata: {exc}")
+            warnings.append(f"Map {definition.name} was skipped: {exc}")
             continue
 
         if modified is not None:
@@ -378,7 +378,7 @@ def analyze_calibration(
                 result["delta_surface_preview"] = delta_preview(original_values, modified_values, limit=18)
                 result["affected_zone"] = _affected_zone(result)
             except ValueError as exc:
-                warnings.append(f"Harta {definition.name} nu a putut fi comparata: {exc}")
+                warnings.append(f"Map {definition.name} could not be compared: {exc}")
 
         map_results.append(result)
 
@@ -406,11 +406,11 @@ def analyze_calibration(
 
     if not definitions:
         warnings.append(
-            "Nu ai incarcat definitii de harti; analiza este limitata la diferente binare."
+            "No map definitions were loaded; analysis is limited to binary differences."
         )
     if modified is None:
         warnings.append(
-            "Nu ai incarcat fisier modificat; pot extrage harti, dar nu pot calcula diferente."
+            "No tuned/current file was loaded; maps can be extracted, but differences cannot be calculated."
         )
 
     summary = {

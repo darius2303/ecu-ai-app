@@ -17,182 +17,182 @@ POWER_CATEGORIES = (
 CATEGORY_RULES: dict[str, dict[str, Any]] = {
     "torque": {
         "title": "Torque request / torque limiters",
-        "target_zone": "mid-high load, zona de cuplu maxim",
-        "suggested_change": "+6% .. +12% conservator, doar pe zonele de sarcina mare",
+        "target_zone": "mid-high load, peak torque area",
+        "suggested_change": "+6% .. +12% conservative increase in high-load cells only",
         "benefits": [
-            "permite ECU-ului sa ceara mai mult cuplu acolo unde hardware-ul poate sustine",
-            "ridica plafonul pentru fuel si boost fara sa elimine protectii global",
+            "allows the ECU to request more torque where the hardware can support it",
+            "raises the operating ceiling for fuel and air control without globally removing protections",
         ],
         "risks": [
-            "daca este crescut peste limita transmisiei poate produce solicitare mecanica",
-            "daca fuel/boost/lambda nu sunt coerente, cresterea poate avea beneficiu limitat",
+            "excessive torque requests can overstress the drivetrain",
+            "if fuel, air and lambda strategy are not coherent, the gain can be limited or unsafe",
         ],
         "actions": [
-            "ridica gradual cererea/limiterele doar in zona de load ridicat",
-            "pastreaza zona de rpm jos mai conservatoare",
-            "coreleaza cu fuel quantity, boost target si smoke/lambda limiter",
+            "raise torque request and limiters gradually only in high-load areas",
+            "keep low-rpm areas more conservative",
+            "cross-check fuel quantity, air model/boost target and lambda/smoke limits",
         ],
         "dependencies": ["fuel", "boost", "air_fuel"],
         "checks": [
             "log torque requested vs torque actual/limit",
-            "verifica limita transmisiei si protectiile termice",
-            "valideaza ca boost si lambda sustin cresterea de cuplu",
+            "check drivetrain limits and thermal protections",
+            "validate that air/boost and lambda support the torque increase",
         ],
         "benefit_level": "high",
         "base_risk": "medium",
     },
     "fuel": {
         "title": "Fuel quantity / injection duration",
-        "target_zone": "high load, zona de cuplu maxim si putere mare",
-        "suggested_change": "+4% .. +10% in pasi mici, limitat de aer disponibil",
+        "target_zone": "high load, peak torque and high-power area",
+        "suggested_change": "+4% .. +10% in small steps, limited by available air",
         "benefits": [
-            "poate creste cuplul si puterea cand exista suficient aer",
-            "ajuta la sustinerea cererii de torque dupa ridicarea limiterelor",
+            "can increase torque and power when enough air is available",
+            "supports the increased torque request after limiter changes",
         ],
         "risks": [
-            "fuel fara boost/lambda coerente poate creste fum si EGT",
-            "durata prea mare la rpm ridicat poate impinge injectia in zona ineficienta",
+            "extra fuel without coherent air/lambda control can increase smoke and EGT",
+            "excessive duration at high rpm can push injection into an inefficient window",
         ],
         "actions": [
-            "creste fuel doar in celulele de load ridicat",
-            "verifica smoke/lambda limiter in aceeasi zona",
-            "controleaza durata injectiei la rpm mare",
+            "increase fuel only in high-load cells",
+            "check lambda/smoke limits in the same operating area",
+            "watch injection duration at high rpm",
         ],
         "dependencies": ["air_fuel", "boost"],
         "checks": [
-            "log lambda/AFR, smoke si EGT",
-            "verifica injection duration si rail actual vs target",
-            "compara cresterea fuel cu cresterea boost",
+            "log lambda/AFR, smoke and EGT",
+            "check injection duration and rail actual vs target",
+            "compare fuel increase against the air/boost increase",
         ],
         "benefit_level": "high",
         "base_risk": "medium-high",
     },
     "boost": {
         "title": "Boost target / boost limiters",
-        "target_zone": "high load peste zona de spool stabil",
-        "suggested_change": "+3% .. +7% daca turbo si limiterele permit",
+        "target_zone": "high load above the stable spool area",
+        "suggested_change": "+3% .. +7% if turbocharger and limiters allow it",
         "benefits": [
-            "sustine combustibil suplimentar cu mai mult aer",
-            "poate reduce fum cand fuel este crescut corect",
+            "supports additional fuel with more air",
+            "can reduce smoke when fuel is increased correctly",
         ],
         "risks": [
-            "boost prea mare poate suprasolicita turbo si creste temperatura admisiei",
-            "fara limitere si duty coerente poate produce overshoot",
+            "too much boost can overstress the turbocharger and raise intake temperature",
+            "without coherent limiters and duty control, overshoot can occur",
         ],
         "actions": [
-            "ajusteaza target si limiter impreuna, nu doar una dintre harti",
-            "evita cresterea agresiva in spool si la rpm foarte jos",
-            "coreleaza cu fuel si smoke/lambda limiter",
+            "adjust target and limiters together, not only one map",
+            "avoid aggressive increases during spool and very low rpm",
+            "cross-check against fuel and lambda/smoke limits",
         ],
         "dependencies": ["air_fuel", "fuel"],
         "checks": [
             "log boost target vs boost actual",
-            "urmareste turbo duty, IAT si EGT",
-            "verifica sa nu existe overshoot in tranzient",
+            "watch turbo duty, IAT and EGT",
+            "check for transient overshoot",
         ],
         "benefit_level": "medium-high",
         "base_risk": "medium-high",
     },
     "air_fuel": {
         "title": "Smoke / lambda / AFR limiter",
-        "target_zone": "high load, aceeasi zona cu fuel si boost",
-        "suggested_change": "ajustare pentru coerenta, nu relaxare globala",
+        "target_zone": "high load, same area as fuel and air/boost changes",
+        "suggested_change": "coherence adjustment, not a global relaxation",
         "benefits": [
-            "permite fuel suplimentar doar unde exista aer suficient",
-            "reduce riscul de fum si EGT cand boost/fuel sunt modificate",
+            "allows additional fuel only where enough air is available",
+            "reduces smoke and EGT risk when fuel/air are modified",
         ],
         "risks": [
-            "relaxarea excesiva poate permite fum si temperaturi mari",
-            "o tinta prea agresiva poate afecta siguranta motorului",
+            "excessive relaxation can allow smoke and high temperatures",
+            "an overly aggressive target can affect engine safety",
         ],
         "actions": [
-            "verifica daca limiterul blocheaza fuel in zonele tintite",
-            "ajusteaza doar celulele afectate de fuel/boost",
-            "pastreaza protectiile pentru zonele cu aer insuficient",
+            "check whether the limiter blocks fuel in the target zones",
+            "adjust only cells affected by fuel/air changes",
+            "keep protections active where air is insufficient",
         ],
         "dependencies": ["fuel", "boost"],
         "checks": [
-            "log lambda/AFR real sub sarcina",
-            "verifica fum vizual si EGT",
-            "compara zona modificata cu fuel si boost",
+            "log actual lambda/AFR under load",
+            "check visible smoke and EGT",
+            "compare the modified area with fuel and air/boost changes",
         ],
         "benefit_level": "medium-high",
         "base_risk": "medium",
     },
     "timing": {
         "title": "SOI / ignition or injection timing",
-        "target_zone": "doar zone validate prin loguri",
-        "suggested_change": "pasi mici, de regula sub 1-2 grade",
+        "target_zone": "only zones validated by logs",
+        "suggested_change": "small steps, usually below 1-2 degrees",
         "benefits": [
-            "poate imbunatati eficienta si raspunsul daca fuel/air sunt deja coerente",
-            "poate reduce EGT in anumite conditii, dar necesita validare",
+            "can improve efficiency and response if fuel/air are already coherent",
+            "can reduce EGT in some conditions, but requires validation",
         ],
         "risks": [
-            "timing agresiv poate creste zgomot, knock sau presiune cilindru",
-            "offset global fara loguri poate produce comportament instabil",
+            "aggressive timing can increase noise, knock or cylinder pressure",
+            "global offsets without logs can create unstable behavior",
         ],
         "actions": [
-            "modifica timing doar dupa stabilizarea fuel/boost/lambda",
-            "aplica pasi mici in zonele tintite, nu offset global",
-            "revino rapid daca apar zgomot, knock sau EGT nefavorabil",
+            "change timing only after fuel/air/lambda strategy is stable",
+            "apply small steps in target areas, not global offsets",
+            "revert quickly if noise, knock or unfavorable EGT appears",
         ],
         "dependencies": ["fuel", "air_fuel"],
         "checks": [
-            "log knock/noise, EGT si presiune cilindru unde este posibil",
-            "verifica SOI in raport cu durata injectiei",
-            "testeaza incremental pe aceeasi zona RPM/load",
+            "log knock/noise, EGT and cylinder pressure where possible",
+            "check SOI against injection duration",
+            "test incrementally in the same RPM/load area",
         ],
         "benefit_level": "medium",
         "base_risk": "high",
     },
     "rail_pressure": {
         "title": "Rail pressure",
-        "target_zone": "high load, unde durata injectiei devine limitativa",
-        "suggested_change": "+2% .. +5% daca pompa si injectoarele permit",
+        "target_zone": "high load, where injection duration becomes limiting",
+        "suggested_change": "+2% .. +5% if pump and injectors allow it",
         "benefits": [
-            "poate sustine atomizarea si reduce durata injectiei",
-            "ajuta cand fuel suplimentar este limitat de durata",
+            "can support atomization and reduce injection duration",
+            "helps when additional fuel is limited by duration",
         ],
         "risks": [
-            "cresterea forteaza pompa, rampa si injectoarele",
-            "poate introduce erori daca limiterele de presiune nu sunt coerente",
+            "higher pressure stresses the pump, rail and injectors",
+            "can introduce faults if pressure limiters are not coherent",
         ],
         "actions": [
-            "ridica target si limiterele asociate coerent",
-            "nu depasi protectiile hardware cunoscute",
-            "foloseste doar daca fuel duration are nevoie de suport",
+            "raise target and related limiters coherently",
+            "do not exceed known hardware protections",
+            "use only when fuel duration needs support",
         ],
         "dependencies": ["fuel"],
         "checks": [
             "log rail target vs rail actual",
-            "verifica duty pompa si erori de presiune",
-            "urmareste EGT si comportamentul injectiei",
+            "check pump duty and pressure faults",
+            "watch EGT and injection behavior",
         ],
         "benefit_level": "medium",
         "base_risk": "high",
     },
     "limiter": {
         "title": "RPM / speed / protection limiters",
-        "target_zone": "doar daca hardware-ul si transmisia permit",
-        "suggested_change": "revizuire controlata, fara eliminare globala",
+        "target_zone": "only if hardware and drivetrain allow it",
+        "suggested_change": "controlled revision, no global removal",
         "benefits": [
-            "poate elimina un plafon care limiteaza strategia Stage 1",
-            "poate extinde zona utila daca motorul inca produce putere sigur",
+            "can remove a cap that limits the calibration strategy",
+            "can extend the useful range if the engine still makes power safely",
         ],
         "risks": [
-            "nu creste singur puterea si poate elimina protectii importante",
-            "cresterea rpm/speed poate solicita motorul si transmisia",
+            "does not increase power by itself and can remove important protections",
+            "higher rpm/speed can stress the engine and drivetrain",
         ],
         "actions": [
-            "identifica daca limiterul chiar blocheaza puterea sau doar protejeaza",
-            "pastreaza protectiile termice si mecanice",
-            "modifica incremental si valideaza prin loguri",
+            "identify whether the limiter blocks power or only protects the system",
+            "keep thermal and mechanical protections",
+            "change incrementally and validate with logs",
         ],
         "dependencies": ["torque", "fuel"],
         "checks": [
-            "verifica limita mecanica motor/transmisie",
-            "log temperaturi si protectii active",
-            "confirma ca harta modificata este limiterul corect",
+            "check engine/drivetrain mechanical limits",
+            "log temperatures and active protections",
+            "confirm that the changed map is the intended limiter",
         ],
         "benefit_level": "low-medium",
         "base_risk": "medium-high",
@@ -390,31 +390,31 @@ def _observation_lines(
     unchanged_dependencies: list[str],
 ) -> list[str]:
     observations = [
-        f"Am identificat {len(category_maps)} harti in categoria {category}.",
+        f"Found {len(category_maps)} maps in the {category} category.",
     ]
     if has_modified:
         if changed_maps:
             direction = _direction(changed_maps[0])
             observations.append(
-                f"In tuned/current, {len(changed_maps)} harti au modificari; maxim {round(max_changed, 2)}% celule schimbate, directie {direction}."
+                f"In tuned/current, {len(changed_maps)} maps changed; maximum {round(max_changed, 2)}% changed cells, direction {direction}."
             )
             if max_delta:
-                observations.append(f"Delta maxim observat: {round(max_delta, 4)}.")
+                observations.append(f"Maximum observed delta: {round(max_delta, 4)}.")
             if zone:
-                observations.append(f"Zona dominanta afectata: {zone}.")
+                observations.append(f"Dominant affected zone: {zone}.")
         else:
             observations.append(
-                "Categoria exista in map pack, dar nu pare modificata in fisierul tuned/current."
+                "This category exists in the map pack, but it does not appear changed in tuned/current."
             )
         if unchanged_dependencies:
             observations.append(
-                "Harti suport prezente, dar nemodificate: "
+                "Supporting maps are present but unchanged: "
                 + ", ".join(unchanged_dependencies)
                 + "."
             )
     else:
         observations.append(
-            "Nu exista fisier tuned/current; recomandarea este orientativa si porneste din hartile disponibile in original."
+            "No tuned/current file was provided; this recommendation is a planning hint based on the original maps."
         )
     return observations
 
@@ -428,24 +428,23 @@ def _reason(
 ) -> str:
     if not has_modified:
         reason = (
-            f"{title} este o zona candidata pentru Stage 1, dar fara fisier tuned "
-            "nu pot confirma ce a fost modificat deja."
+            f"{title} is a candidate tuning area, but without a tuned file "
+            "the app cannot confirm what has already been changed."
         )
     elif changed:
         reason = (
-            f"{title} a fost modificata in tuned/current; recomandarea este un review "
-            "de coerenta, risc si validare."
+            f"{title} changed in tuned/current; this is a coherence, risk and validation review."
         )
     else:
         reason = (
-            f"{title} nu pare modificata, dar poate fi necesara ca harta suport "
-            "pentru modificarile din celelalte categorii."
+            f"{title} does not appear changed, but it may be needed as a supporting map "
+            "for changes in other categories."
         )
 
     if missing_dependencies:
-        reason += " Lipsesc harti suport din definitii: " + ", ".join(missing_dependencies) + "."
+        reason += " Supporting maps are missing from definitions: " + ", ".join(missing_dependencies) + "."
     elif unchanged_dependencies and has_modified:
-        reason += " Verifica daca hartile suport nemodificate limiteaza rezultatul."
+        reason += " Check whether unchanged supporting maps are limiting the result."
     return reason
 
 
@@ -456,9 +455,9 @@ def _context_note(
 ) -> str:
     fuel = (fuel_type or "").lower()
     if category == "boost" and is_turbo is False:
-        return "Motorul este marcat aspirat, deci boost nu este tratat ca dependinta principala."
+        return "The engine is marked naturally aspirated, so boost is not treated as a primary dependency."
     if category == "air_fuel" and fuel == "petrol":
-        return "Pentru benzina aspirata, categoria air/fuel trebuie interpretata ca model aer/lambda/AFR, nu smoke limiter diesel."
+        return "For petrol engines, air/fuel should be interpreted as airflow/lambda/AFR modeling rather than a diesel smoke limiter."
     return ""
 
 
@@ -506,10 +505,10 @@ def _recommendation_for_category(
         observations.append(context_note)
     risks = list(rule["risks"])
     if missing:
-        risks.append("definitiile nu contin harti suport: " + ", ".join(missing))
+        risks.append("definitions do not include supporting maps: " + ", ".join(missing))
     if unchanged and has_modified and changed:
         risks.append(
-            "harti suport prezente, dar nemodificate, pot limita beneficiul: "
+            "supporting maps are present but unchanged and may limit the benefit: "
             + ", ".join(unchanged)
         )
 
@@ -517,10 +516,10 @@ def _recommendation_for_category(
     if not has_modified:
         actions.insert(
             0,
-            "foloseste recomandarea ca plan de investigatie si confirma adresele in WinOLS",
+            "use this recommendation as an investigation plan and confirm addresses in WinOLS",
         )
     elif changed:
-        actions.insert(0, "compara zona modificata cu logurile reale inainte de crestere suplimentara")
+        actions.insert(0, "compare the modified zone with real logs before increasing further")
 
     priority = _priority_score(category, risk, confidence, bool(changed), missing)
 
@@ -588,8 +587,8 @@ def _supporting_recommendations(
                 is_turbo=is_turbo,
             )
             recommendation["reason"] = (
-                f"{recommendation['title']} nu pare modificata, dar {changed_category} "
-                "a fost modificata. Verifica daca aceasta harta suport limiteaza sau face nesigura schimbarea."
+                f"{recommendation['title']} does not appear changed, but {changed_category} "
+                "was changed. Check whether this supporting map limits or makes the change unsafe."
             )
             recommendations.append(recommendation)
     return recommendations
@@ -648,23 +647,23 @@ def generate_power_recommendations(
                 "title": "Map definitions required",
                 "maps": [],
                 "target_zone": "-",
-                "suggested_change": "incarca definitii pentru torque, boost, fuel, lambda/smoke, SOI sau rail pressure",
-                "reason": "Fisierul binar brut nu spune sigur care bytes reprezinta harti de calibrare.",
+                "suggested_change": "load definitions for torque, boost, fuel, lambda/smoke, SOI or rail pressure",
+                "reason": "A raw binary file cannot reliably identify which bytes represent calibration maps.",
                 "observations": [
-                    "Nu exista suficiente definitii categorizate pentru recomandari tehnice.",
+                    "There are not enough categorized definitions for technical recommendations.",
                 ],
                 "benefits": [
-                    "cu map pack corect, aplicatia poate lega recomandarile de harti reale",
+                    "with a correct map pack, the app can link recommendations to real maps",
                 ],
                 "risks": [
-                    "fara definitii, orice recomandare pe bytes brut ar fi nesigura",
+                    "without definitions, recommendations on raw bytes would be unsafe",
                 ],
                 "actions": [
-                    "exporta map pack din WinOLS",
-                    "adauga address, rows, columns, data_type, factor si category",
+                    "export a map pack from WinOLS",
+                    "add address, rows, columns, data_type, factor and category",
                 ],
                 "checks": [
-                    "verifica daca map pack-ul contine torque, boost, fuel, lambda/smoke, timing sau rail pressure",
+                    "check whether the map pack contains torque, boost, fuel, lambda/smoke, timing or rail pressure",
                 ],
                 "missing_dependencies": [],
                 "supporting_maps_to_review": [],

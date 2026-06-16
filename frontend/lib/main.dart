@@ -84,23 +84,13 @@ class _HomePageState extends State<HomePage> {
 
   final api = ApiService();
 
-  final rpmController = TextEditingController();
-  final boostController = TextEditingController();
-  final injectionController = TextEditingController();
-  final afrController = TextEditingController();
   final displacementController = TextEditingController();
   final stockHpController = TextEditingController();
-  final mapTextController = TextEditingController();
 
   String fuelType = 'diesel';
-  String inputMode = 'file';
-  String calibrationMapType = 'soi';
   bool isTurbo = true;
 
-  bool loadingParse = false;
   bool loadingCalibrationAnalyze = false;
-  bool loadingAnalyze = false;
-  bool loadingFuelMap = false;
   bool loadingReport = false;
 
   String? errorMessage;
@@ -109,10 +99,8 @@ class _HomePageState extends State<HomePage> {
   String? potentialClass;
   double? estimatedHpAfterStage1;
 
-  Map<String, dynamic>? fuelMapResult;
   Map<String, dynamic>? calibrationResult;
   Map<String, dynamic>? derivedFeatures;
-  Map<String, dynamic>? parsedCalibrationMap;
   String? calibrationError;
   String? originalCalibrationFileName;
   Uint8List? originalCalibrationBytes;
@@ -120,9 +108,6 @@ class _HomePageState extends State<HomePage> {
   Uint8List? modifiedCalibrationBytes;
   String? definitionsCalibrationFileName;
   Uint8List? definitionsCalibrationBytes;
-  String? selectedMapFileName;
-  String? selectedBinaryEcuFileName;
-  Uint8List? selectedBinaryEcuBytes;
   String? savedPdfPath;
   int mobileTabIndex = 0;
 
@@ -137,32 +122,6 @@ class _HomePageState extends State<HomePage> {
       return Map<String, dynamic>.from(value);
     }
     return null;
-  }
-
-  Map<String, dynamic> buildInputData() {
-    final input = <String, dynamic>{
-      'engine_displacement': parseNumber(displacementController.text),
-      'fuel_type': fuelType,
-      'is_turbo': isTurbo,
-      'stock_hp': stockHpController.text.trim().isEmpty
-          ? null
-          : parseNumber(stockHpController.text),
-    };
-
-    if (inputMode == 'file' && parsedCalibrationMap != null) {
-      input['calibration_map'] = parsedCalibrationMap;
-    } else if (inputMode == 'paste' &&
-        mapTextController.text.trim().isNotEmpty) {
-      input['calibration_map_text'] = mapTextController.text.trim();
-      input['calibration_map_type'] = calibrationMapType;
-    } else {
-      input['rpm'] = parseNumber(rpmController.text);
-      input['boost_pressure'] = parseNumber(boostController.text);
-      input['injection_quantity'] = parseNumber(injectionController.text);
-      input['afr'] = parseNumber(afrController.text);
-    }
-
-    return input;
   }
 
   Future<({String name, Uint8List bytes})?> pickCalibrationFile([
@@ -183,7 +142,7 @@ class _HomePageState extends State<HomePage> {
     final bytes =
         file.bytes ?? (path == null ? null : await File(path).readAsBytes());
     if (bytes == null) {
-      throw Exception('Nu am putut citi fisierul selectat.');
+      throw Exception('Could not read the selected file.');
     }
     return (name: file.name, bytes: bytes);
   }
@@ -200,7 +159,7 @@ class _HomePageState extends State<HomePage> {
       });
     } catch (e) {
       setState(() {
-        calibrationError = 'Eroare la fisierul original: $e';
+        calibrationError = 'Original file error: $e';
       });
     }
   }
@@ -217,7 +176,7 @@ class _HomePageState extends State<HomePage> {
       });
     } catch (e) {
       setState(() {
-        calibrationError = 'Eroare la fisierul modificat: $e';
+        calibrationError = 'Tuned/current file error: $e';
       });
     }
   }
@@ -234,7 +193,7 @@ class _HomePageState extends State<HomePage> {
       });
     } catch (e) {
       setState(() {
-        calibrationError = 'Eroare la definitii: $e';
+        calibrationError = 'Map pack error: $e';
       });
     }
   }
@@ -282,7 +241,8 @@ class _HomePageState extends State<HomePage> {
     final modifiedBytes = modifiedCalibrationBytes;
     if (originalName == null || originalBytes == null) {
       setState(() {
-        calibrationError = 'Incarca fisierul original inainte de analiza.';
+        calibrationError =
+            'Load the original calibration file before running analysis.';
       });
       return;
     }
@@ -328,212 +288,11 @@ class _HomePageState extends State<HomePage> {
       });
     } catch (e) {
       setState(() {
-        calibrationError = 'Eroare la analiza calibrarii: $e';
+        calibrationError = 'Calibration analysis failed: $e';
       });
     } finally {
       setState(() {
         loadingCalibrationAnalyze = false;
-      });
-    }
-  }
-
-  Future<void> importMapFile() async {
-    FocusScope.of(context).unfocus();
-
-    setState(() {
-      loadingParse = true;
-      errorMessage = null;
-    });
-
-    try {
-      final picked = await FilePicker.platform.pickFiles(
-        type: FileType.any,
-        withData: true,
-      );
-
-      if (picked == null || picked.files.isEmpty) {
-        return;
-      }
-
-      final file = picked.files.single;
-      final path = file.path;
-      final bytes =
-          file.bytes ?? (path == null ? null : await File(path).readAsBytes());
-      if (bytes == null) {
-        throw Exception('Nu am putut citi fisierul selectat.');
-      }
-
-      try {
-        final result = await api.parseMapFile(
-          fileName: file.name,
-          bytes: bytes,
-          mapType: calibrationMapType,
-          fuelType: fuelType,
-          isTurbo: isTurbo,
-        );
-
-        setState(() {
-          selectedMapFileName = result['file_name']?.toString() ?? file.name;
-          selectedBinaryEcuFileName = null;
-          selectedBinaryEcuBytes = null;
-          parsedCalibrationMap = asStringMap(result['calibration_map']);
-          derivedFeatures = asStringMap(result['derived_features']);
-          stage1GainPercent = null;
-          potentialClass = null;
-          estimatedHpAfterStage1 = null;
-          fuelMapResult = null;
-          calibrationResult = null;
-          savedPdfPath = null;
-        });
-
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Harta importata: ${file.name}')),
-        );
-        return;
-      } catch (_) {
-        setState(() {
-          selectedMapFileName = file.name;
-          selectedBinaryEcuFileName = file.name;
-          selectedBinaryEcuBytes = bytes;
-          parsedCalibrationMap = null;
-          derivedFeatures = null;
-          stage1GainPercent = null;
-          potentialClass = null;
-          estimatedHpAfterStage1 = null;
-          fuelMapResult = null;
-          calibrationResult = null;
-          savedPdfPath = null;
-        });
-      }
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Fisier ECU binar importat: ${file.name}')),
-      );
-    } catch (e) {
-      setState(() {
-        errorMessage = 'Eroare la importul hartii: $e';
-      });
-    } finally {
-      setState(() {
-        loadingParse = false;
-      });
-    }
-  }
-
-  Future<void> analyzeData() async {
-    FocusScope.of(context).unfocus();
-    final showResultsAfterAnalyze =
-        MediaQuery.sizeOf(context).width < _mobileBreakpoint;
-
-    setState(() {
-      loadingAnalyze = true;
-      errorMessage = null;
-    });
-
-    try {
-      if (inputMode == 'file' && selectedBinaryEcuBytes != null) {
-        final calibration = await api.analyzeCalibration(
-          originalFileName: selectedBinaryEcuFileName ?? selectedMapFileName!,
-          originalBytes: selectedBinaryEcuBytes!,
-          definitionsFileName: definitionsCalibrationFileName,
-          definitionsBytes: definitionsCalibrationBytes,
-          engineDisplacement: parseNumber(displacementController.text),
-          fuelType: fuelType,
-          isTurbo: isTurbo,
-          stockHp: parseNumber(stockHpController.text),
-        );
-        final estimate = asStringMap(calibration['power_estimate']);
-
-        if (estimate == null || estimate['available'] != true) {
-          setState(() {
-            calibrationResult = calibration;
-            stage1GainPercent = null;
-            potentialClass = null;
-            estimatedHpAfterStage1 = null;
-            derivedFeatures = null;
-            if (showResultsAfterAnalyze) {
-              mobileTabIndex = 1;
-            }
-          });
-          return;
-        }
-
-        setState(() {
-          calibrationResult = calibration;
-          stage1GainPercent = (estimate['stage1_gain_percent'] as num?)
-              ?.toDouble();
-          potentialClass = estimate['potential_class']?.toString();
-          estimatedHpAfterStage1 =
-              (estimate['estimated_hp_after_stage1'] as num?)?.toDouble();
-          derivedFeatures = asStringMap(estimate['derived_inputs']);
-          if (showResultsAfterAnalyze) {
-            mobileTabIndex = 1;
-          }
-        });
-        return;
-      }
-
-      final result = await api.analyze(buildInputData());
-
-      setState(() {
-        stage1GainPercent = (result['stage1_gain_percent'] as num?)?.toDouble();
-        potentialClass = result['potential_class']?.toString();
-        estimatedHpAfterStage1 = (result['estimated_hp_after_stage1'] as num?)
-            ?.toDouble();
-        derivedFeatures = asStringMap(result['derived_features']);
-        calibrationResult = null;
-        if (showResultsAfterAnalyze) {
-          mobileTabIndex = 1;
-        }
-      });
-    } catch (e) {
-      setState(() {
-        errorMessage = 'Eroare la analiza: $e';
-      });
-    } finally {
-      setState(() {
-        loadingAnalyze = false;
-      });
-    }
-  }
-
-  Future<void> generateFuelMap() async {
-    FocusScope.of(context).unfocus();
-    final showOutputAfterGenerate =
-        MediaQuery.sizeOf(context).width < _mobileBreakpoint;
-
-    setState(() {
-      loadingFuelMap = true;
-      errorMessage = null;
-    });
-
-    try {
-      final result = await api.fuelMap(buildInputData());
-
-      setState(() {
-        fuelMapResult = result;
-        stage1GainPercent ??= (result['stage1_gain_percent'] as num?)
-            ?.toDouble();
-        potentialClass ??= result['potential_class']?.toString();
-        derivedFeatures = asStringMap(result['derived_features']);
-        if (showOutputAfterGenerate) {
-          mobileTabIndex = 2;
-        }
-      });
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Fuel map generat cu succes.')),
-      );
-    } catch (e) {
-      setState(() {
-        errorMessage = 'Eroare la generarea fuel map: $e';
-      });
-    } finally {
-      setState(() {
-        loadingFuelMap = false;
       });
     }
   }
@@ -549,25 +308,24 @@ class _HomePageState extends State<HomePage> {
     try {
       final originalName = originalCalibrationFileName;
       final originalBytes = originalCalibrationBytes;
-      final useCalibrationReport =
-          originalName != null && originalBytes != null;
-      final bytes = useCalibrationReport
-          ? await api.calibrationReport(
-              originalFileName: originalName,
-              originalBytes: originalBytes,
-              modifiedFileName: modifiedCalibrationFileName,
-              modifiedBytes: modifiedCalibrationBytes,
-              definitionsFileName: definitionsCalibrationFileName,
-              definitionsBytes: definitionsCalibrationBytes,
-              engineDisplacement: parseNumber(displacementController.text),
-              fuelType: fuelType,
-              isTurbo: isTurbo,
-              stockHp: parseNumber(stockHpController.text),
-            )
-          : await api.report(buildInputData());
-      final fileName = useCalibrationReport
-          ? 'calibration_tuner_report.pdf'
-          : 'stage1_report.pdf';
+      if (originalName == null || originalBytes == null) {
+        throw Exception(
+          'Load the original calibration file before exporting a report.',
+        );
+      }
+      final bytes = await api.calibrationReport(
+        originalFileName: originalName,
+        originalBytes: originalBytes,
+        modifiedFileName: modifiedCalibrationFileName,
+        modifiedBytes: modifiedCalibrationBytes,
+        definitionsFileName: definitionsCalibrationFileName,
+        definitionsBytes: definitionsCalibrationBytes,
+        engineDisplacement: parseNumber(displacementController.text),
+        fuelType: fuelType,
+        isTurbo: isTurbo,
+        stockHp: parseNumber(stockHpController.text),
+      );
+      const fileName = 'calibration_tuner_report.pdf';
 
       final directory = await getApplicationDocumentsDirectory();
       final file = File('${directory.path}${Platform.pathSeparator}$fileName');
@@ -581,7 +339,7 @@ class _HomePageState extends State<HomePage> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('PDF salvat in: ${file.path}'),
+          content: Text('PDF saved to: ${file.path}'),
           action: SnackBarAction(
             label: 'Open',
             onPressed: () {
@@ -592,7 +350,7 @@ class _HomePageState extends State<HomePage> {
       );
     } catch (e) {
       setState(() {
-        errorMessage = 'Eroare la generarea PDF-ului: $e';
+        errorMessage = 'PDF export failed: $e';
       });
     } finally {
       setState(() {
@@ -603,13 +361,8 @@ class _HomePageState extends State<HomePage> {
 
   @override
   void dispose() {
-    rpmController.dispose();
-    boostController.dispose();
-    injectionController.dispose();
-    afrController.dispose();
     displacementController.dispose();
     stockHpController.dispose();
-    mapTextController.dispose();
     super.dispose();
   }
 
@@ -679,7 +432,7 @@ class _HomePageState extends State<HomePage> {
       icon: Icons.tune_rounded,
       title: 'Calibration Input',
       subtitle:
-          'Analizeaza originalul cu map pack si compara cu tuned cand exista.',
+          'Analyze the original calibration and compare it with a tuned file when available.',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -733,7 +486,7 @@ class _HomePageState extends State<HomePage> {
           const _InlineNotice(
             icon: Icons.info_outline_rounded,
             text:
-                'Cu doar original + map pack pot sugera directii de tuning. Cu tuned/current pot compara ce s-a schimbat deja si pot estima riscuri pe zone.',
+                'With original + map pack, the app provides a tuning plan. With tuned/current, it reviews what changed and highlights risk zones.',
             color: Color(0xFF475569),
           ),
           const SizedBox(height: 16),
@@ -867,8 +620,8 @@ class _HomePageState extends State<HomePage> {
     if (errorMessage != null) {
       return _SectionPanel(
         icon: Icons.error_outline_rounded,
-        title: 'A aparut o eroare',
-        subtitle: 'Verifica backend-ul si valorile introduse.',
+        title: 'Something went wrong',
+        subtitle: 'Check the backend status and the provided inputs.',
         accentColor: Colors.red,
         child: Text(
           errorMessage!,
@@ -882,8 +635,8 @@ class _HomePageState extends State<HomePage> {
     if (calibrationError != null) {
       return _SectionPanel(
         icon: Icons.error_outline_rounded,
-        title: 'Analiza nu a putut rula',
-        subtitle: 'Verifica fisierele incarcate si incearca din nou.',
+        title: 'Analysis could not run',
+        subtitle: 'Check the uploaded files and try again.',
         accentColor: Colors.red,
         child: Text(
           calibrationError!,
@@ -898,20 +651,20 @@ class _HomePageState extends State<HomePage> {
     if (!hasResult) {
       return _SectionPanel(
         icon: Icons.auto_graph_rounded,
-        title: 'Rezultat analiza',
-        subtitle: 'Rezultatele vor aparea aici dupa prima analiza.',
+        title: 'Analysis Results',
+        subtitle: 'Results will appear here after the first analysis.',
         child: const _EmptyState(
           icon: Icons.insights_rounded,
           text:
-              'Incarca originalul, fisierul tuned si apasa Analyze calibration.',
+              'Load the original file, optionally add tuned/map-pack files, then run the analysis.',
         ),
       );
     }
 
     return _SectionPanel(
       icon: Icons.auto_graph_rounded,
-      title: 'Rezultat analiza',
-      subtitle: 'Diferente, harti afectate si recomandari pentru tuner.',
+      title: 'Analysis Results',
+      subtitle: 'Differences, affected maps and tuner recommendations.',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -1047,66 +800,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget buildFuelMapPreviewCard() {
-    if (fuelMapResult == null) {
-      return const SizedBox.shrink();
-    }
-
-    final fuelMap = fuelMapResult!['fuel_map'];
-    final fuelMapDerived = asStringMap(fuelMapResult!['derived_features']);
-
-    return _SectionPanel(
-      icon: Icons.table_chart_rounded,
-      title: 'Fuel Map Preview',
-      subtitle: 'Date generate pentru vizualizare si raport.',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              _StatusChip(
-                icon: Icons.workspace_premium_rounded,
-                label: 'Potential: ${fuelMapResult!['potential_class']}',
-              ),
-              if (fuelMapDerived != null)
-                _StatusChip(
-                  icon: Icons.grid_4x4_rounded,
-                  label:
-                      'Map: ${fuelMapDerived['rows']}x${fuelMapDerived['columns']}',
-                ),
-              const _StatusChip(
-                icon: Icons.check_circle_rounded,
-                label: 'Fuel map generat',
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFC),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
-            ),
-            child: Text(
-              fuelMap.toString(),
-              maxLines: 8,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontFamily: 'monospace',
-                fontSize: 12.5,
-                height: 1.35,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget buildActionButton({
     required String label,
     required IconData icon,
@@ -1130,7 +823,7 @@ class _HomePageState extends State<HomePage> {
     return _SectionPanel(
       icon: Icons.file_download_done_rounded,
       title: 'Output',
-      subtitle: 'Exporta raportul PDF pentru analiza calibrarii.',
+      subtitle: 'Export the calibration analysis report as PDF.',
       child: Wrap(
         spacing: 10,
         runSpacing: 10,
@@ -1234,7 +927,7 @@ class _HomePageState extends State<HomePage> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    'ECU Stage 1 Assistant',
+                                    'ECU Calibration Analyzer',
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
@@ -1252,7 +945,7 @@ class _HomePageState extends State<HomePage> {
                                   ),
                                   SizedBox(height: 6),
                                   Text(
-                                    'Import fisier, estimare si sugestii tuning.',
+                                    'Import calibration files, review maps and generate tuner guidance.',
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
@@ -1303,12 +996,12 @@ class _HomePageState extends State<HomePage> {
           NavigationDestination(
             icon: Icon(Icons.tune_rounded),
             selectedIcon: Icon(Icons.tune),
-            label: 'Date',
+            label: 'Input',
           ),
           NavigationDestination(
             icon: Icon(Icons.auto_graph_rounded),
             selectedIcon: Icon(Icons.auto_graph),
-            label: 'Rezultat',
+            label: 'Results',
           ),
           NavigationDestination(
             icon: Icon(Icons.file_download_done_rounded),
@@ -1322,12 +1015,7 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    final busy =
-        loadingParse ||
-        loadingCalibrationAnalyze ||
-        loadingAnalyze ||
-        loadingFuelMap ||
-        loadingReport;
+    final busy = loadingCalibrationAnalyze || loadingReport;
     final isMobile = MediaQuery.sizeOf(context).width < _mobileBreakpoint;
 
     if (isMobile) {
@@ -1348,7 +1036,7 @@ class _HomePageState extends State<HomePage> {
                 bottom: 18,
               ),
               title: const Text(
-                'ECU Stage 1 Assistant',
+                'ECU Calibration Analyzer',
                 style: TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w900,
@@ -1442,7 +1130,7 @@ class _IntroBand extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'ECU Stage 1 Assistant',
+                  'ECU Calibration Analyzer',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.w800,
                     color: const Color(0xFF0F172A),
@@ -1450,7 +1138,7 @@ class _IntroBand extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Incarca un fisier ECU sau o harta exportata, apoi primeste estimare si sugestii explicabile.',
+                  'Load ECU calibration files and map packs, then review explainable tuner recommendations.',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: const Color(0xFF475569),
                     height: 1.45,
@@ -1461,7 +1149,7 @@ class _IntroBand extends StatelessWidget {
           ),
           const _StatusPill(
             icon: Icons.api_rounded,
-            label: 'API local: 127.0.0.1:8000',
+            label: 'Local API: 127.0.0.1:8000',
           ),
         ],
       ),
@@ -1726,7 +1414,7 @@ class _RecommendationTile extends StatelessWidget {
           if (observations.isNotEmpty) ...[
             const SizedBox(height: 10),
             _RecommendationSection(
-              title: 'Observatii',
+              title: 'Observations',
               icon: Icons.visibility_rounded,
               items: observations,
               color: const Color(0xFF2563EB),
@@ -1735,7 +1423,7 @@ class _RecommendationTile extends StatelessWidget {
           if (actions.isNotEmpty) ...[
             const SizedBox(height: 8),
             _RecommendationSection(
-              title: 'Actiuni recomandate',
+              title: 'Recommended actions',
               icon: Icons.build_circle_rounded,
               items: actions,
               color: const Color(0xFF0F766E),
@@ -1756,7 +1444,7 @@ class _RecommendationTile extends StatelessWidget {
                             ? (constraints.maxWidth - 10) / 2
                             : constraints.maxWidth,
                         child: _RecommendationSection(
-                          title: 'Beneficii',
+                          title: 'Benefits',
                           icon: Icons.add_chart_rounded,
                           items: benefits,
                           color: const Color(0xFF0F766E),
@@ -1769,7 +1457,7 @@ class _RecommendationTile extends StatelessWidget {
                             ? (constraints.maxWidth - 10) / 2
                             : constraints.maxWidth,
                         child: _RecommendationSection(
-                          title: 'Riscuri',
+                          title: 'Risks',
                           icon: Icons.warning_amber_rounded,
                           items: risks,
                           color: const Color(0xFFB45309),
@@ -1954,7 +1642,7 @@ class _CalibrationReportPanel extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            report['headline']?.toString() ?? 'Analiza calibrarii este gata.',
+            report['headline']?.toString() ?? 'Calibration analysis completed.',
             style: const TextStyle(
               color: Color(0xFF334155),
               fontWeight: FontWeight.w700,
@@ -2190,147 +1878,153 @@ class _MapBrowserState extends State<_MapBrowser> {
       ),
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-          initiallyExpanded: false,
-          tilePadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-          childrenPadding: EdgeInsets.zero,
-          leading: const Icon(Icons.view_list_rounded, size: 20),
-          title: Text(
-            'Map Browser',
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
-          ),
-          subtitle: Text(
-            'Cautare, filtre si preview 3D pentru hartile extrase.',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: const Color(0xFF64748B),
-              fontWeight: FontWeight.w600,
+        child: Material(
+          type: MaterialType.transparency,
+          child: ExpansionTile(
+            initiallyExpanded: false,
+            tilePadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 4,
             ),
-          ),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                '${maps.length}/$totalMaps maps',
-                style: const TextStyle(
-                  color: Color(0xFF64748B),
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(width: 8),
-              const Icon(Icons.expand_more_rounded),
-            ],
-          ),
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 4, 14, 10),
-              child: Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  SizedBox(
-                    width: 300,
-                    child: TextField(
-                      controller: searchController,
-                      onChanged: (_) => setState(() {}),
-                      decoration: const InputDecoration(
-                        prefixIcon: Icon(Icons.search_rounded),
-                        labelText: 'Search maps',
-                        hintText: 'name, address, category',
-                      ),
-                    ),
-                  ),
-                  SizedBox(
-                    width: 220,
-                    child: DropdownButtonFormField<String>(
-                      initialValue: selectedCategory,
-                      decoration: const InputDecoration(
-                        prefixIcon: Icon(Icons.category_rounded),
-                        labelText: 'Category',
-                      ),
-                      items: [
-                        for (final category in categoryItems)
-                          DropdownMenuItem(
-                            value: category,
-                            child: Text(
-                              category == 'all' ? 'All categories' : category,
-                            ),
-                          ),
-                      ],
-                      onChanged: (value) {
-                        if (value == null) return;
-                        setState(() {
-                          categoryFilter = value;
-                        });
-                      },
-                    ),
-                  ),
-                  SizedBox(
-                    width: 190,
-                    child: DropdownButtonFormField<String>(
-                      initialValue: sortMode,
-                      decoration: const InputDecoration(
-                        prefixIcon: Icon(Icons.sort_rounded),
-                        labelText: 'Sort',
-                      ),
-                      items: const [
-                        DropdownMenuItem(
-                          value: 'changed',
-                          child: Text('Most changed'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'category',
-                          child: Text('Category'),
-                        ),
-                        DropdownMenuItem(value: 'name', child: Text('Name')),
-                      ],
-                      onChanged: (value) {
-                        if (value == null) return;
-                        setState(() {
-                          sortMode = value;
-                        });
-                      },
-                    ),
-                  ),
-                  FilterChip(
-                    selected: changedOnly,
-                    avatar: const Icon(Icons.difference_rounded, size: 18),
-                    label: const Text('Changed only'),
-                    onSelected: (value) {
-                      setState(() {
-                        changedOnly = value;
-                      });
-                    },
-                  ),
-                ],
+            childrenPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.view_list_rounded, size: 20),
+            title: Text(
+              'Map Browser',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+            ),
+            subtitle: Text(
+              'Search, filter and inspect 3D previews for extracted maps.',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: const Color(0xFF64748B),
+                fontWeight: FontWeight.w600,
               ),
             ),
-            if (maps.isEmpty)
-              const Padding(
-                padding: EdgeInsets.fromLTRB(14, 0, 14, 14),
-                child: _EmptyState(
-                  icon: Icons.manage_search_rounded,
-                  text: 'Nu exista harti pentru filtrele selectate.',
-                ),
-              )
-            else
-              for (final item in maps.take(40)) _MapBrowserTile(item: item),
-            if (maps.length > 40)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-                child: Text(
-                  'Afisate primele 40 rezultate. Foloseste cautarea sau filtrele pentru focus.',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: const Color(0xFF64748B),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '${maps.length}/$totalMaps maps',
+                  style: const TextStyle(
+                    color: Color(0xFF64748B),
                     fontWeight: FontWeight.w700,
                   ),
                 ),
+                const SizedBox(width: 8),
+                const Icon(Icons.expand_more_rounded),
+              ],
+            ),
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 4, 14, 10),
+                child: Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    SizedBox(
+                      width: 300,
+                      child: TextField(
+                        controller: searchController,
+                        onChanged: (_) => setState(() {}),
+                        decoration: const InputDecoration(
+                          prefixIcon: Icon(Icons.search_rounded),
+                          labelText: 'Search maps',
+                          hintText: 'name, address, category',
+                        ),
+                      ),
+                    ),
+                    SizedBox(
+                      width: 220,
+                      child: DropdownButtonFormField<String>(
+                        initialValue: selectedCategory,
+                        decoration: const InputDecoration(
+                          prefixIcon: Icon(Icons.category_rounded),
+                          labelText: 'Category',
+                        ),
+                        items: [
+                          for (final category in categoryItems)
+                            DropdownMenuItem(
+                              value: category,
+                              child: Text(
+                                category == 'all' ? 'All categories' : category,
+                              ),
+                            ),
+                        ],
+                        onChanged: (value) {
+                          if (value == null) return;
+                          setState(() {
+                            categoryFilter = value;
+                          });
+                        },
+                      ),
+                    ),
+                    SizedBox(
+                      width: 190,
+                      child: DropdownButtonFormField<String>(
+                        initialValue: sortMode,
+                        decoration: const InputDecoration(
+                          prefixIcon: Icon(Icons.sort_rounded),
+                          labelText: 'Sort',
+                        ),
+                        items: const [
+                          DropdownMenuItem(
+                            value: 'changed',
+                            child: Text('Most changed'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'category',
+                            child: Text('Category'),
+                          ),
+                          DropdownMenuItem(value: 'name', child: Text('Name')),
+                        ],
+                        onChanged: (value) {
+                          if (value == null) return;
+                          setState(() {
+                            sortMode = value;
+                          });
+                        },
+                      ),
+                    ),
+                    FilterChip(
+                      selected: changedOnly,
+                      avatar: const Icon(Icons.difference_rounded, size: 18),
+                      label: const Text('Changed only'),
+                      onSelected: (value) {
+                        setState(() {
+                          changedOnly = value;
+                        });
+                      },
+                    ),
+                  ],
+                ),
               ),
-          ],
+              if (maps.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(14, 0, 14, 14),
+                  child: _EmptyState(
+                    icon: Icons.manage_search_rounded,
+                    text: 'No maps match the selected filters.',
+                  ),
+                )
+              else
+                for (final item in maps.take(40)) _MapBrowserTile(item: item),
+              if (maps.length > 40)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+                  child: Text(
+                    'Showing the first 40 results. Use search or filters to narrow the list.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: const Color(0xFF64748B),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -2383,63 +2077,68 @@ class _MapBrowserTile extends StatelessWidget {
             .where((value) => value != null && value.toString().isNotEmpty)
             .join(' | ');
 
-    return ExpansionTile(
-      tilePadding: const EdgeInsets.symmetric(horizontal: 14),
-      childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-      leading: Icon(
-        changedCells > 0 ? Icons.difference_rounded : Icons.table_rows_rounded,
-        color: changedCells > 0
-            ? const Color(0xFF0F766E)
-            : const Color(0xFF64748B),
-      ),
-      title: Text(
-        item['name']?.toString() ?? 'Map',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(fontWeight: FontWeight.w900),
-      ),
-      subtitle: Text(metadata, maxLines: 1, overflow: TextOverflow.ellipsis),
-      trailing: SizedBox(
-        width: 76,
-        child: Text(
-          hasModified ? '$changedPercent%' : 'view',
-          textAlign: TextAlign.end,
-          style: TextStyle(
-            color: changedCells > 0
-                ? const Color(0xFF0F766E)
-                : const Color(0xFF64748B),
-            fontWeight: FontWeight.w900,
+    return Material(
+      type: MaterialType.transparency,
+      child: ExpansionTile(
+        tilePadding: const EdgeInsets.symmetric(horizontal: 14),
+        childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+        leading: Icon(
+          changedCells > 0
+              ? Icons.difference_rounded
+              : Icons.table_rows_rounded,
+          color: changedCells > 0
+              ? const Color(0xFF0F766E)
+              : const Color(0xFF64748B),
+        ),
+        title: Text(
+          item['name']?.toString() ?? 'Map',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontWeight: FontWeight.w900),
+        ),
+        subtitle: Text(metadata, maxLines: 1, overflow: TextOverflow.ellipsis),
+        trailing: SizedBox(
+          width: 76,
+          child: Text(
+            hasModified ? '$changedPercent%' : 'view',
+            textAlign: TextAlign.end,
+            style: TextStyle(
+              color: changedCells > 0
+                  ? const Color(0xFF0F766E)
+                  : const Color(0xFF64748B),
+              fontWeight: FontWeight.w900,
+            ),
           ),
         ),
+        children: [
+          _MapMetricStrip(item: item, diff: diff),
+          const SizedBox(height: 10),
+          _MapSurfacePreview(
+            title: hasModified ? 'Modified surface' : 'Original surface',
+            rows: hasModified
+                ? item['modified_surface_preview'] ?? item['modified_preview']
+                : item['surface_preview'] ?? item['preview'],
+            deltaRows: item['delta_surface_preview'] ?? item['delta_preview'],
+          ),
+          const SizedBox(height: 10),
+          _MapPreviewGrid(title: 'Original preview', rows: item['preview']),
+          if (hasModified) ...[
+            const SizedBox(height: 10),
+            _MapPreviewGrid(
+              title: 'Modified preview',
+              rows: item['modified_preview'],
+            ),
+          ],
+          if (item['delta_preview'] != null) ...[
+            const SizedBox(height: 10),
+            _MapPreviewGrid(
+              title: 'Delta preview',
+              rows: item['delta_preview'],
+              highlightDelta: true,
+            ),
+          ],
+        ],
       ),
-      children: [
-        _MapMetricStrip(item: item, diff: diff),
-        const SizedBox(height: 10),
-        _MapSurfacePreview(
-          title: hasModified ? 'Modified surface' : 'Original surface',
-          rows: hasModified
-              ? item['modified_surface_preview'] ?? item['modified_preview']
-              : item['surface_preview'] ?? item['preview'],
-          deltaRows: item['delta_surface_preview'] ?? item['delta_preview'],
-        ),
-        const SizedBox(height: 10),
-        _MapPreviewGrid(title: 'Original preview', rows: item['preview']),
-        if (hasModified) ...[
-          const SizedBox(height: 10),
-          _MapPreviewGrid(
-            title: 'Modified preview',
-            rows: item['modified_preview'],
-          ),
-        ],
-        if (item['delta_preview'] != null) ...[
-          const SizedBox(height: 10),
-          _MapPreviewGrid(
-            title: 'Delta preview',
-            rows: item['delta_preview'],
-            highlightDelta: true,
-          ),
-        ],
-      ],
     );
   }
 }

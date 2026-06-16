@@ -32,7 +32,7 @@ def _decode_uploaded_file(file: CalibrationUploadedFile, max_size: int) -> bytes
         raise HTTPException(status_code=400, detail=f"{file.file_name} nu a putut fi decodat.") from exc
 
     if len(raw_bytes) > max_size:
-        raise HTTPException(status_code=413, detail=f"{file.file_name} este prea mare.")
+        raise HTTPException(status_code=413, detail=f"{file.file_name} is too large.")
     return raw_bytes
 
 
@@ -44,7 +44,7 @@ def parse_map_file(data: MapFileInput):
         raise HTTPException(status_code=400, detail="Fisierul nu a putut fi decodat.") from exc
 
     if len(raw_bytes) > 2_000_000:
-        raise HTTPException(status_code=413, detail="Fisierul este prea mare pentru import text.")
+        raise HTTPException(status_code=413, detail="The file is too large for text import.")
 
     try:
         raw_text = decode_map_file_content(raw_bytes)
