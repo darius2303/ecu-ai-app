@@ -15,6 +15,11 @@ from app.services.file_formats import EcuBinary
 from app.services.map_definitions import MapDefinition
 from app.services.calibration_power import estimate_power_from_calibration
 from app.services.calibration_recommender import generate_power_recommendations
+from app.services.calibration_dataset import build_ml_dataset
+from app.services.calibration_ml import (
+    enrich_maps_with_ml_predictions,
+    enrich_recommendations_with_ml_evidence,
+)
 
 
 def _binary_diff(original: bytes, modified: bytes | None) -> dict[str, Any] | None:
@@ -428,7 +433,51 @@ def analyze_calibration(
         findings,
         key=lambda item: {"high": 0, "medium": 1, "low": 2}[item["severity"]],
     )
-    report = _build_calibration_report(
+    result = {
+        "summary": summary,
+        "binary_diff": binary_diff,
+        "maps": map_results,
+        "recommendations": recommendations,
+        "power_estimate": power_estimate,
+        "findings": sorted_findings,
+        "warnings": warnings,
+    }
+    result["ml_dataset"] = build_ml_dataset(
+        result,
+        engine_displacement=engine_displacement,
+        fuel_type=fuel_type,
+        is_turbo=is_turbo,
+        stock_hp=stock_hp,
+    )
+    ml_summary = enrich_maps_with_ml_predictions(
+        map_results=map_results,
+        ml_dataset=result["ml_dataset"],
+    )
+    result["ml_summary"] = ml_summary
+    enrich_recommendations_with_ml_evidence(recommendations, map_results)
+    recommendations.sort(
+        key=lambda item: (
+            -int(item.get("priority_score") or 0),
+            {"high": 0, "medium-high": 1, "medium": 2, "low": 3, "unknown": 4}.get(
+                str(item.get("risk") or "unknown"),
+                9,
+            ),
+            {"high": 0, "medium": 1, "low": 2}.get(
+                str(item.get("confidence") or "low"),
+                9,
+            ),
+        )
+    )
+    if ml_summary.get("available") is False:
+        warnings.append(
+            f"AI-assisted review is unavailable: {ml_summary.get('reason')}"
+        )
+    elif ml_summary.get("bad_stage1_count", 0) > 0:
+        warnings.append(
+            "AI-assisted review flagged "
+            f"{ml_summary.get('bad_stage1_count')} map(s) as possible risky Stage 1 patterns."
+        )
+    result["report"] = _build_calibration_report(
         summary=summary,
         binary_diff=binary_diff,
         changed_maps=changed_maps,
@@ -437,13 +486,4 @@ def analyze_calibration(
         warnings=warnings,
     )
 
-    return {
-        "summary": summary,
-        "binary_diff": binary_diff,
-        "maps": map_results,
-        "recommendations": recommendations,
-        "power_estimate": power_estimate,
-        "findings": sorted_findings,
-        "report": report,
-        "warnings": warnings,
-    }
+    return result

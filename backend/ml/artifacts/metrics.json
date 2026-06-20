@@ -1,7 +1,0 @@
-{
-    "mae_percent": 1.2099644468825348,
-    "r2": 0.858063517964032,
-    "n_samples": 8000,
-    "model": "RandomForestRegressor",
-    "stage": "Stage 1"
-}

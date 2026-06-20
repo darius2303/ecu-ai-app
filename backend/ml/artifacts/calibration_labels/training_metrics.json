@@ -1,0 +1,554 @@
+{
+  "dataset": "generated\\training_dataset.csv",
+  "rows": 446,
+  "features": {
+    "numeric": [
+      "changed_percent",
+      "max_abs_delta",
+      "affected_rpm_min",
+      "affected_rpm_max",
+      "affected_load_min",
+      "affected_load_max",
+      "ml_confidence_seed"
+    ],
+    "categorical": [
+      "map_name",
+      "map_category",
+      "source_mode",
+      "direction",
+      "seed_label",
+      "recommendation_priority",
+      "recommendation_risk"
+    ]
+  },
+  "models": [
+    {
+      "target": "manual_label",
+      "trained": true,
+      "artifact": "ml\\artifacts\\calibration_labels\\calibration_label_model.joblib",
+      "rows": 446,
+      "train_rows": 334,
+      "test_rows": 112,
+      "class_counts": {
+        "good_stage1_change": 139,
+        "risky_limiter_change": 120,
+        "torque_increase": 93,
+        "fuel_support_needed": 40,
+        "afr_lambda_risk": 26,
+        "bad_stage1_change": 12,
+        "timing_risk": 10,
+        "safe_supporting_change": 3,
+        "not_power_related": 2,
+        "boost_support_needed": 1
+      },
+      "accuracy": 0.9107,
+      "classification_report": {
+        "afr_lambda_risk": {
+          "precision": 0.875,
+          "recall": 0.7,
+          "f1-score": 0.7777777777777778,
+          "support": 10.0
+        },
+        "bad_stage1_change": {
+          "precision": 0.3333333333333333,
+          "recall": 0.25,
+          "f1-score": 0.2857142857142857,
+          "support": 4.0
+        },
+        "boost_support_needed": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 0.0
+        },
+        "fuel_support_needed": {
+          "precision": 1.0,
+          "recall": 0.8,
+          "f1-score": 0.8888888888888888,
+          "support": 10.0
+        },
+        "good_stage1_change": {
+          "precision": 0.9666666666666667,
+          "recall": 1.0,
+          "f1-score": 0.9830508474576272,
+          "support": 29.0
+        },
+        "not_power_related": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 1.0
+        },
+        "risky_limiter_change": {
+          "precision": 1.0,
+          "recall": 0.967741935483871,
+          "f1-score": 0.9836065573770492,
+          "support": 31.0
+        },
+        "safe_supporting_change": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 0.0
+        },
+        "timing_risk": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 2.0
+        },
+        "torque_increase": {
+          "precision": 0.9259259259259259,
+          "recall": 1.0,
+          "f1-score": 0.9615384615384616,
+          "support": 25.0
+        },
+        "accuracy": 0.9107142857142857,
+        "macro avg": {
+          "precision": 0.6100925925925925,
+          "recall": 0.5717741935483871,
+          "f1-score": 0.588057681875409,
+          "support": 112.0
+        },
+        "weighted avg": {
+          "precision": 0.9309358465608467,
+          "recall": 0.9107142857142857,
+          "f1-score": 0.9182880643120096,
+          "support": 112.0
+        }
+      },
+      "confusion_matrix": {
+        "labels": [
+          "afr_lambda_risk",
+          "bad_stage1_change",
+          "boost_support_needed",
+          "fuel_support_needed",
+          "good_stage1_change",
+          "not_power_related",
+          "risky_limiter_change",
+          "safe_supporting_change",
+          "timing_risk",
+          "torque_increase"
+        ],
+        "matrix": [
+          [
+            7,
+            1,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            1,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            1,
+            1,
+            8,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            29,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            30,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            25
+          ]
+        ]
+      },
+      "top_features": [
+        {
+          "feature": "num__max_abs_delta",
+          "importance": 0.075935
+        },
+        {
+          "feature": "num__ml_confidence_seed",
+          "importance": 0.066146
+        },
+        {
+          "feature": "num__changed_percent",
+          "importance": 0.053693
+        },
+        {
+          "feature": "cat__map_name_RPM Limiter",
+          "importance": 0.053465
+        },
+        {
+          "feature": "cat__map_category_limiter",
+          "importance": 0.049615
+        },
+        {
+          "feature": "cat__recommendation_risk_medium-high",
+          "importance": 0.047887
+        },
+        {
+          "feature": "num__affected_rpm_max",
+          "importance": 0.044669
+        },
+        {
+          "feature": "cat__seed_label_limiter_review",
+          "importance": 0.044423
+        },
+        {
+          "feature": "cat__map_category_torque",
+          "importance": 0.043841
+        },
+        {
+          "feature": "cat__seed_label_torque_review",
+          "importance": 0.043094
+        },
+        {
+          "feature": "num__affected_rpm_min",
+          "importance": 0.041787
+        },
+        {
+          "feature": "cat__recommendation_risk_high",
+          "importance": 0.039078
+        },
+        {
+          "feature": "cat__seed_label_timing_review",
+          "importance": 0.038335
+        },
+        {
+          "feature": "cat__map_category_timing",
+          "importance": 0.038169
+        },
+        {
+          "feature": "cat__map_name_Maximum speed of vehicle",
+          "importance": 0.037256
+        },
+        {
+          "feature": "cat__recommendation_priority_medium",
+          "importance": 0.036842
+        },
+        {
+          "feature": "cat__recommendation_priority_high",
+          "importance": 0.035486
+        },
+        {
+          "feature": "cat__map_category_air_fuel",
+          "importance": 0.032725
+        },
+        {
+          "feature": "cat__map_category_fuel",
+          "importance": 0.027586
+        },
+        {
+          "feature": "cat__direction_increase",
+          "importance": 0.027342
+        },
+        {
+          "feature": "cat__direction_unchanged",
+          "importance": 0.021195
+        },
+        {
+          "feature": "cat__seed_label_unchanged_support_map",
+          "importance": 0.019964
+        },
+        {
+          "feature": "cat__seed_label_air_fuel_review",
+          "importance": 0.019013
+        },
+        {
+          "feature": "num__affected_load_max",
+          "importance": 0.012946
+        },
+        {
+          "feature": "cat__map_name_Injection base map",
+          "importance": 0.01036
+        }
+      ]
+    },
+    {
+      "target": "manual_risk_label",
+      "trained": true,
+      "artifact": "ml\\artifacts\\calibration_labels\\calibration_risk_model.joblib",
+      "rows": 446,
+      "train_rows": 334,
+      "test_rows": 112,
+      "class_counts": {
+        "high": 148,
+        "low": 141,
+        "medium-high": 111,
+        "medium": 46
+      },
+      "accuracy": 0.9732,
+      "classification_report": {
+        "high": {
+          "precision": 1.0,
+          "recall": 0.918918918918919,
+          "f1-score": 0.9577464788732394,
+          "support": 37.0
+        },
+        "low": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 35.0
+        },
+        "medium": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 12.0
+        },
+        "medium-high": {
+          "precision": 0.9032258064516129,
+          "recall": 1.0,
+          "f1-score": 0.9491525423728814,
+          "support": 28.0
+        },
+        "accuracy": 0.9732142857142857,
+        "macro avg": {
+          "precision": 0.9758064516129032,
+          "recall": 0.9797297297297297,
+          "f1-score": 0.9767247553115302,
+          "support": 112.0
+        },
+        "weighted avg": {
+          "precision": 0.9758064516129031,
+          "recall": 0.9732142857142857,
+          "f1-score": 0.9733293830781298,
+          "support": 112.0
+        }
+      },
+      "confusion_matrix": {
+        "labels": [
+          "high",
+          "low",
+          "medium",
+          "medium-high"
+        ],
+        "matrix": [
+          [
+            34,
+            0,
+            0,
+            3
+          ],
+          [
+            0,
+            35,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            12,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            28
+          ]
+        ]
+      },
+      "top_features": [
+        {
+          "feature": "cat__map_name_Maximum speed of vehicle",
+          "importance": 0.135913
+        },
+        {
+          "feature": "num__max_abs_delta",
+          "importance": 0.104954
+        },
+        {
+          "feature": "num__changed_percent",
+          "importance": 0.069695
+        },
+        {
+          "feature": "cat__map_name_RPM Limiter",
+          "importance": 0.066844
+        },
+        {
+          "feature": "num__ml_confidence_seed",
+          "importance": 0.058902
+        },
+        {
+          "feature": "cat__recommendation_priority_high",
+          "importance": 0.05669
+        },
+        {
+          "feature": "cat__seed_label_unchanged_support_map",
+          "importance": 0.051505
+        },
+        {
+          "feature": "cat__seed_label_limiter_review",
+          "importance": 0.0501
+        },
+        {
+          "feature": "cat__recommendation_priority_medium",
+          "importance": 0.048498
+        },
+        {
+          "feature": "cat__direction_unchanged",
+          "importance": 0.044479
+        },
+        {
+          "feature": "cat__recommendation_risk_high",
+          "importance": 0.041013
+        },
+        {
+          "feature": "cat__map_category_torque",
+          "importance": 0.034853
+        },
+        {
+          "feature": "cat__map_category_limiter",
+          "importance": 0.033997
+        },
+        {
+          "feature": "cat__direction_increase",
+          "importance": 0.032785
+        },
+        {
+          "feature": "cat__seed_label_torque_review",
+          "importance": 0.031514
+        },
+        {
+          "feature": "cat__recommendation_risk_medium-high",
+          "importance": 0.026279
+        },
+        {
+          "feature": "cat__map_category_fuel",
+          "importance": 0.021133
+        },
+        {
+          "feature": "num__affected_rpm_max",
+          "importance": 0.019226
+        },
+        {
+          "feature": "cat__map_name_Injection base map",
+          "importance": 0.011995
+        },
+        {
+          "feature": "num__affected_rpm_min",
+          "importance": 0.011806
+        },
+        {
+          "feature": "num__affected_load_max",
+          "importance": 0.009593
+        },
+        {
+          "feature": "num__affected_load_min",
+          "importance": 0.006409
+        },
+        {
+          "feature": "cat__map_name_Volumetric efficiency",
+          "importance": 0.005253
+        },
+        {
+          "feature": "cat__map_category_timing",
+          "importance": 0.003788
+        },
+        {
+          "feature": "cat__seed_label_timing_review",
+          "importance": 0.00353
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "Baseline model only; dataset is small and likely imbalanced.",
+    "Use predictions as decision-support, not as an automatic tuning decision."
+  ]
+}

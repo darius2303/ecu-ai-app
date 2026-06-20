@@ -2,35 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.models.schemas import ECUInput
-from app.services.analyzer import analyze_ecu_data
-
-
-def _summary_mean(item: dict[str, Any]) -> float | None:
-    summary = item.get("modified_summary") or item.get("summary") or {}
-    value = summary.get("mean")
-    return float(value) if isinstance(value, (int, float)) else None
-
-
-def _normalize_boost(value: float | None, is_turbo: bool) -> float:
-    if not is_turbo:
-        return 1.0
-    if value is None:
-        return 1.55
-    if value > 300.0:
-        return max(0.8, min(2.6, value / 1000.0))
-    if value > 20.0:
-        return max(0.8, min(2.6, value / 100.0))
-    return max(0.8, min(2.6, value))
-
-
-def _normalize_injection(value: float | None) -> float:
-    if value is None:
-        return 55.0
-    if value > 500.0:
-        return max(8.0, min(95.0, value / 100.0))
-    return max(8.0, min(95.0, value))
-
 
 def estimate_power_from_calibration(
     map_results: list[dict[str, Any]],
@@ -50,7 +21,7 @@ def estimate_power_from_calibration(
     if missing:
         return {
             "available": False,
-            "reason": "Lipsesc date motor: " + ", ".join(missing),
+            "reason": "Missing engine data: " + ", ".join(missing),
             "confidence": "low",
         }
 
@@ -58,52 +29,79 @@ def estimate_power_from_calibration(
     for item in map_results:
         by_category.setdefault(str(item.get("category") or "unknown"), []).append(item)
 
-    boost_mean = _summary_mean(by_category.get("boost", [{}])[0]) if by_category.get("boost") else None
-    fuel_mean = _summary_mean(by_category.get("fuel", [{}])[0]) if by_category.get("fuel") else None
-
-    rpm = 3500.0 if is_turbo else 4500.0
-    boost_pressure = _normalize_boost(boost_mean, is_turbo)
-    injection_quantity = _normalize_injection(fuel_mean)
-    afr = 14.7 if fuel_type == "diesel" else 13.2 if is_turbo else 14.0
-
-    confidence = "low"
-    if by_category.get("boost") and by_category.get("fuel"):
-        confidence = "medium"
-    if by_category.get("boost") and by_category.get("fuel") and by_category.get("air_fuel"):
-        confidence = "medium-high"
-
-    try:
-        result = analyze_ecu_data(
-            ECUInput(
-                rpm=rpm,
-                boost_pressure=boost_pressure,
-                injection_quantity=injection_quantity,
-                afr=afr,
-                engine_displacement=engine_displacement,
-                fuel_type=fuel_type,  # type: ignore[arg-type]
-                is_turbo=is_turbo,
-                stock_hp=stock_hp,
-            )
-        )
-    except Exception as exc:  # model load / validation errors should not break calibration analysis
+    changed_maps = [
+        item for item in map_results
+        if (item.get("diff") or {}).get("changed_cells", 0) > 0
+    ]
+    if not changed_maps:
         return {
             "available": False,
-            "reason": f"Estimarea nu a putut fi calculata: {exc}",
+            "reason": "No modified maps were available for a rough power estimate.",
             "confidence": "low",
         }
 
-    result.update(
-        {
-            "available": True,
-            "confidence": confidence,
-            "source": "calibration_maps",
-            "derived_inputs": {
-                "rpm": rpm,
-                "boost_pressure": boost_pressure,
-                "injection_quantity": injection_quantity,
-                "afr": afr,
-            },
-            "note": "Estimare euristica din harti binare + definitii; valideaza cu loguri si dyno.",
-        }
-    )
-    return result
+    category_weights = {
+        "torque": 0.055,
+        "fuel": 0.04,
+        "boost": 0.05 if is_turbo else 0.01,
+        "air_fuel": 0.035,
+        "timing": 0.018,
+        "rail_pressure": 0.022,
+        "limiter": 0.008,
+    }
+    gain = 0.0
+    changed_categories: set[str] = set()
+    for item in changed_maps:
+        category = str(item.get("category") or "unknown")
+        changed_categories.add(category)
+        diff = item.get("diff") or {}
+        changed_percent = float(diff.get("changed_percent") or 0.0)
+        max_delta = float(diff.get("max_abs_delta") or 0.0)
+        direction = str(diff.get("direction") or "unchanged")
+        direction_factor = 1.0 if direction == "increase" else 0.4 if direction == "mixed" else 0.15
+        magnitude_factor = min(1.35, 0.75 + min(max_delta, 25.0) / 50.0)
+        gain += category_weights.get(category, 0.005) * changed_percent * direction_factor * magnitude_factor
+
+    if "torque" in changed_categories and ("fuel" in by_category or "air_fuel" in by_category):
+        gain += 1.0
+    if is_turbo and "boost" in changed_categories:
+        gain += 1.2
+    if "limiter" in changed_categories and changed_categories.isdisjoint({"torque", "fuel", "boost", "air_fuel"}):
+        gain = min(gain, 2.0)
+
+    if fuel_type == "petrol" and not is_turbo:
+        gain *= 0.8
+    if fuel_type == "diesel" and is_turbo:
+        gain *= 1.08
+
+    gain = max(0.0, min(18.0, gain))
+
+    confidence = "low"
+    if by_category.get("fuel") and by_category.get("air_fuel"):
+        confidence = "medium"
+    if by_category.get("torque") and by_category.get("fuel") and by_category.get("air_fuel"):
+        confidence = "medium-high"
+
+    estimated_hp = None
+    if stock_hp is not None:
+        estimated_hp = round(float(stock_hp) * (1.0 + gain / 100.0), 2)
+
+    potential_class = "Low"
+    if gain >= 9.0:
+        potential_class = "High"
+    elif gain >= 4.0:
+        potential_class = "Moderate"
+
+    return {
+        "available": True,
+        "stage1_gain_percent": round(gain, 2),
+        "potential_class": potential_class,
+        "estimated_hp_after_stage1": estimated_hp,
+        "confidence": confidence,
+        "source": "calibration_heuristic",
+        "derived_inputs": {
+            "changed_categories": sorted(changed_categories),
+            "changed_maps": len(changed_maps),
+        },
+        "note": "Rough heuristic estimate from map changes; validate with logs and dyno data.",
+    }

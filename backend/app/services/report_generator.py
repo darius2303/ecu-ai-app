@@ -452,6 +452,19 @@ def _draw_labeled_value(
     )
 
 
+def _ml_evidence_text(item: dict) -> str:
+    evidence = item.get("ml_evidence")
+    if not isinstance(evidence, dict):
+        return ""
+
+    text = str(evidence.get("headline") or "AI-assisted review available.")
+    flagged_maps = evidence.get("flagged_maps")
+    if isinstance(flagged_maps, list) and flagged_maps:
+        names = ", ".join(str(name) for name in flagged_maps[:3])
+        return f"{text} Review maps: {names}."
+    return text
+
+
 def _draw_metric_cards(
     c: canvas.Canvas,
     metrics: list[tuple[str, str]],
@@ -816,6 +829,7 @@ def generate_calibration_report(
             reason_text = escape(str(item.get("reason") or ""))
             target_text = str(item.get("target_zone") or "-")
             suggested_text = str(item.get("suggested_change") or "-")
+            ml_text = _ml_evidence_text(item)
             reason_height = _paragraph_height(reason_text, content_width - 24, font_size=8.2)
             target_height = max(
                 12,
@@ -824,6 +838,12 @@ def generate_calibration_report(
             suggested_height = max(
                 12,
                 _paragraph_height(escape(suggested_text), content_width - 92, font_size=8),
+            )
+            ml_height = (
+                max(12, _paragraph_height(escape(ml_text), content_width - 92, font_size=8))
+                + 6
+                if ml_text
+                else 0
             )
             actions_height = _bullets_height(item.get("actions") or [], column_width, limit=2, font_size=7.4)
             risks_height = _bullets_height(item.get("risks") or [], column_width, limit=2, font_size=7.4)
@@ -836,6 +856,7 @@ def generate_calibration_report(
                 + target_height
                 + 6
                 + suggested_height
+                + ml_height
                 + 24
                 + max(actions_height, risks_height)
                 + 18,
@@ -887,6 +908,15 @@ def generate_calibration_report(
                 info_y,
                 content_width - 24,
             )
+            if ml_text:
+                info_y = _draw_labeled_value(
+                    c,
+                    "AI REVIEW",
+                    ml_text,
+                    margin_x + 12,
+                    info_y - 5,
+                    content_width - 24,
+                )
             columns_title_y = info_y - 18
             c.setFillColor(PDF_TEAL)
             c.setFont("Helvetica-Bold", 8)

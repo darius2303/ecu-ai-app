@@ -81,8 +81,11 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   static const double _mobileBreakpoint = 720;
+  static final bool _showDeveloperTools = false;
 
   final api = ApiService();
+  final mapBrowserKey = GlobalKey<_MapBrowserState>();
+  final recommendationsKey = GlobalKey();
 
   final displacementController = TextEditingController();
   final stockHpController = TextEditingController();
@@ -92,6 +95,8 @@ class _HomePageState extends State<HomePage> {
 
   bool loadingCalibrationAnalyze = false;
   bool loadingReport = false;
+  bool loadingDatasetExport = false;
+  bool loadingLabelingExport = false;
 
   String? errorMessage;
 
@@ -109,6 +114,10 @@ class _HomePageState extends State<HomePage> {
   String? definitionsCalibrationFileName;
   Uint8List? definitionsCalibrationBytes;
   String? savedPdfPath;
+  String? savedDatasetPath;
+  String? savedLabelingPath;
+  _MapFocusRequest? mapFocusRequest;
+  String? highlightedRecommendationCategory;
   int mobileTabIndex = 0;
 
   double? parseNumber(String value) {
@@ -202,10 +211,62 @@ class _HomePageState extends State<HomePage> {
     calibrationResult = null;
     calibrationError = null;
     savedPdfPath = null;
+    savedDatasetPath = null;
+    savedLabelingPath = null;
+    mapFocusRequest = null;
+    highlightedRecommendationCategory = null;
     stage1GainPercent = null;
     potentialClass = null;
     estimatedHpAfterStage1 = null;
     derivedFeatures = null;
+  }
+
+  void focusMapsForRecommendation(Map<String, dynamic> recommendation) {
+    final focus = _MapFocusRequest.fromRecommendation(recommendation);
+    if (focus == null) return;
+
+    setState(() {
+      mapFocusRequest = focus;
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      mapBrowserKey.currentState?.applyFocus(focus);
+      final context = mapBrowserKey.currentContext;
+      if (context == null) return;
+      Scrollable.ensureVisible(
+        context,
+        duration: const Duration(milliseconds: 420),
+        curve: Curves.easeOutCubic,
+        alignment: 0.08,
+      );
+    });
+  }
+
+  void clearMapFocus() {
+    setState(() {
+      mapFocusRequest = null;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      mapBrowserKey.currentState?.clearFocus();
+    });
+  }
+
+  void showRecommendationFromMap(Map<String, dynamic> recommendation) {
+    setState(() {
+      highlightedRecommendationCategory = recommendation['category']
+          ?.toString();
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final context = recommendationsKey.currentContext;
+      if (context == null) return;
+      Scrollable.ensureVisible(
+        context,
+        duration: const Duration(milliseconds: 420),
+        curve: Curves.easeOutCubic,
+        alignment: 0.08,
+      );
+    });
   }
 
   void removeCalibrationOriginal() {
@@ -355,6 +416,132 @@ class _HomePageState extends State<HomePage> {
     } finally {
       setState(() {
         loadingReport = false;
+      });
+    }
+  }
+
+  Future<void> exportMlDataset() async {
+    FocusScope.of(context).unfocus();
+
+    setState(() {
+      loadingDatasetExport = true;
+      errorMessage = null;
+    });
+
+    try {
+      final originalName = originalCalibrationFileName;
+      final originalBytes = originalCalibrationBytes;
+      if (originalName == null || originalBytes == null) {
+        throw Exception(
+          'Load the original calibration file before exporting the ML dataset.',
+        );
+      }
+      final bytes = await api.calibrationMlDataset(
+        originalFileName: originalName,
+        originalBytes: originalBytes,
+        modifiedFileName: modifiedCalibrationFileName,
+        modifiedBytes: modifiedCalibrationBytes,
+        definitionsFileName: definitionsCalibrationFileName,
+        definitionsBytes: definitionsCalibrationBytes,
+        engineDisplacement: parseNumber(displacementController.text),
+        fuelType: fuelType,
+        isTurbo: isTurbo,
+        stockHp: parseNumber(stockHpController.text),
+      );
+
+      final directory = await getApplicationDocumentsDirectory();
+      const fileName = 'calibration_ml_dataset.json';
+      final file = File('${directory.path}${Platform.pathSeparator}$fileName');
+      await file.writeAsBytes(bytes, flush: true);
+
+      setState(() {
+        savedDatasetPath = file.path;
+      });
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('ML dataset saved to: ${file.path}'),
+          action: SnackBarAction(
+            label: 'Open',
+            onPressed: () {
+              OpenFile.open(file.path);
+            },
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('ML dataset export failed: $e')));
+    } finally {
+      setState(() {
+        loadingDatasetExport = false;
+      });
+    }
+  }
+
+  Future<void> exportLabelingTemplate() async {
+    FocusScope.of(context).unfocus();
+
+    setState(() {
+      loadingLabelingExport = true;
+      errorMessage = null;
+    });
+
+    try {
+      final originalName = originalCalibrationFileName;
+      final originalBytes = originalCalibrationBytes;
+      if (originalName == null || originalBytes == null) {
+        throw Exception(
+          'Load the original calibration file before exporting a labeling template.',
+        );
+      }
+      final bytes = await api.calibrationLabelingTemplate(
+        originalFileName: originalName,
+        originalBytes: originalBytes,
+        modifiedFileName: modifiedCalibrationFileName,
+        modifiedBytes: modifiedCalibrationBytes,
+        definitionsFileName: definitionsCalibrationFileName,
+        definitionsBytes: definitionsCalibrationBytes,
+        engineDisplacement: parseNumber(displacementController.text),
+        fuelType: fuelType,
+        isTurbo: isTurbo,
+        stockHp: parseNumber(stockHpController.text),
+      );
+
+      final directory = await getApplicationDocumentsDirectory();
+      const fileName = 'calibration_labeling_template.csv';
+      final file = File('${directory.path}${Platform.pathSeparator}$fileName');
+      await file.writeAsBytes(bytes, flush: true);
+
+      setState(() {
+        savedLabelingPath = file.path;
+      });
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Labeling template saved to: ${file.path}'),
+          action: SnackBarAction(
+            label: 'Open',
+            onPressed: () {
+              OpenFile.open(file.path);
+            },
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Labeling export failed: $e')));
+    } finally {
+      setState(() {
+        loadingLabelingExport = false;
       });
     }
   }
@@ -610,6 +797,7 @@ class _HomePageState extends State<HomePage> {
     final recommendations = asList(calibrationResult?['recommendations']);
     final warnings = asList(calibrationResult?['warnings']);
     final report = asStringMap(calibrationResult?['report']);
+    final mlDataset = asStringMap(calibrationResult?['ml_dataset']);
     final hasResult =
         calibrationResult != null ||
         stage1GainPercent != null ||
@@ -771,9 +959,18 @@ class _HomePageState extends State<HomePage> {
             const SizedBox(height: 14),
             _CalibrationReportPanel(report: report),
           ],
+          if (_showDeveloperTools && mlDataset != null) ...[
+            const SizedBox(height: 14),
+            _MlDatasetPanel(dataset: mlDataset),
+          ],
           if (recommendations.isNotEmpty) ...[
             const SizedBox(height: 14),
-            _RecommendationPanel(items: recommendations),
+            _RecommendationPanel(
+              key: recommendationsKey,
+              items: recommendations,
+              highlightedCategory: highlightedRecommendationCategory,
+              onFocusMaps: focusMapsForRecommendation,
+            ),
           ],
           if (warnings.isNotEmpty) ...[
             const SizedBox(height: 14),
@@ -789,11 +986,26 @@ class _HomePageState extends State<HomePage> {
           ],
           if (maps.isNotEmpty) ...[
             const SizedBox(height: 6),
-            _MapBrowser(items: maps),
+            _MapBrowser(
+              key: mapBrowserKey,
+              items: maps,
+              recommendations: recommendations,
+              focusRequest: mapFocusRequest,
+              onClearFocus: clearMapFocus,
+              onShowRecommendation: showRecommendationFromMap,
+            ),
           ],
           if (savedPdfPath != null) ...[
             const SizedBox(height: 14),
             _PathNote(path: savedPdfPath!),
+          ],
+          if (_showDeveloperTools && savedDatasetPath != null) ...[
+            const SizedBox(height: 14),
+            _PathNote(path: savedDatasetPath!),
+          ],
+          if (_showDeveloperTools && savedLabelingPath != null) ...[
+            const SizedBox(height: 14),
+            _PathNote(path: savedLabelingPath!),
           ],
         ],
       ),
@@ -805,9 +1017,10 @@ class _HomePageState extends State<HomePage> {
     required IconData icon,
     required Future<void> Function() onPressed,
     required bool isLoading,
+    bool enabled = true,
   }) {
     return OutlinedButton.icon(
-      onPressed: isLoading ? null : onPressed,
+      onPressed: isLoading || !enabled ? null : onPressed,
       icon: isLoading
           ? const SizedBox(
               width: 18,
@@ -820,10 +1033,13 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget buildActions() {
+    final hasMlDataset = calibrationResult?['ml_dataset'] != null;
     return _SectionPanel(
       icon: Icons.file_download_done_rounded,
-      title: 'Output',
-      subtitle: 'Export the calibration analysis report as PDF.',
+      title: 'Exports',
+      subtitle: _showDeveloperTools
+          ? 'Export reports and ML-ready development datasets.'
+          : 'Export the calibration analysis report as PDF.',
       child: Wrap(
         spacing: 10,
         runSpacing: 10,
@@ -834,6 +1050,22 @@ class _HomePageState extends State<HomePage> {
             onPressed: generatePdfReport,
             isLoading: loadingReport,
           ),
+          if (_showDeveloperTools) ...[
+            buildActionButton(
+              label: 'Export ML Dataset',
+              icon: Icons.dataset_rounded,
+              onPressed: exportMlDataset,
+              isLoading: loadingDatasetExport,
+              enabled: hasMlDataset,
+            ),
+            buildActionButton(
+              label: 'Export Labeling CSV',
+              icon: Icons.rate_review_rounded,
+              onPressed: exportLabelingTemplate,
+              isLoading: loadingLabelingExport,
+              enabled: hasMlDataset,
+            ),
+          ],
         ],
       ),
     );
@@ -1253,10 +1485,70 @@ class _CompactMetric extends StatelessWidget {
   }
 }
 
+class _MapFocusRequest {
+  final String category;
+  final Set<String> mapNames;
+  final String title;
+
+  const _MapFocusRequest({
+    required this.category,
+    required this.mapNames,
+    required this.title,
+  });
+
+  static _MapFocusRequest? fromRecommendation(Map<String, dynamic> item) {
+    final category = item['category']?.toString();
+    if (category == null || category.isEmpty || category == 'definitions') {
+      return null;
+    }
+
+    final names = <String>{};
+    final maps = item['maps'];
+    if (maps is List) {
+      names.addAll(
+        maps
+            .map((value) => value?.toString().trim() ?? '')
+            .where((value) => value.isNotEmpty),
+      );
+    }
+
+    final mlEvidence = item['ml_evidence'];
+    if (mlEvidence is Map && mlEvidence['flagged_maps'] is List) {
+      names.addAll(
+        (mlEvidence['flagged_maps'] as List)
+            .map((value) => value?.toString().trim() ?? '')
+            .where((value) => value.isNotEmpty),
+      );
+    }
+
+    return _MapFocusRequest(
+      category: category,
+      mapNames: names,
+      title: item['title']?.toString() ?? category,
+    );
+  }
+
+  bool matches(Map<String, dynamic> item) {
+    final itemCategory = item['category']?.toString() ?? 'unknown';
+    if (itemCategory != category) return false;
+    if (mapNames.isEmpty) return true;
+    final name = item['name']?.toString() ?? '';
+    final shortName = item['short_name']?.toString() ?? '';
+    return mapNames.contains(name) || mapNames.contains(shortName);
+  }
+}
+
 class _RecommendationPanel extends StatelessWidget {
   final List<dynamic> items;
+  final String? highlightedCategory;
+  final ValueChanged<Map<String, dynamic>>? onFocusMaps;
 
-  const _RecommendationPanel({required this.items});
+  const _RecommendationPanel({
+    super.key,
+    required this.items,
+    this.highlightedCategory,
+    this.onFocusMaps,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1292,7 +1584,14 @@ class _RecommendationPanel extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           for (final recommendation in recommendations) ...[
-            _RecommendationTile(item: recommendation),
+            _RecommendationTile(
+              item: recommendation,
+              highlighted:
+                  recommendation['category']?.toString() == highlightedCategory,
+              onFocusMaps: onFocusMaps == null
+                  ? null
+                  : () => onFocusMaps!(recommendation),
+            ),
             if (recommendation != recommendations.last)
               const SizedBox(height: 10),
           ],
@@ -1304,8 +1603,14 @@ class _RecommendationPanel extends StatelessWidget {
 
 class _RecommendationTile extends StatelessWidget {
   final Map<String, dynamic> item;
+  final bool highlighted;
+  final VoidCallback? onFocusMaps;
 
-  const _RecommendationTile({required this.item});
+  const _RecommendationTile({
+    required this.item,
+    this.highlighted = false,
+    this.onFocusMaps,
+  });
 
   Color get accent {
     switch (item['risk']) {
@@ -1333,13 +1638,21 @@ class _RecommendationTile extends StatelessWidget {
         : const [];
     final risks = item['risks'] is List ? (item['risks'] as List) : const [];
     final checks = item['checks'] is List ? (item['checks'] as List) : const [];
+    final mlEvidence = item['ml_evidence'] is Map
+        ? Map<String, dynamic>.from(item['ml_evidence'] as Map)
+        : null;
 
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: highlighted ? const Color(0xFFEFF6FF) : Colors.white,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: accent.withValues(alpha: 0.24)),
+        border: Border.all(
+          color: highlighted
+              ? const Color(0xFF93C5FD)
+              : accent.withValues(alpha: 0.24),
+          width: highlighted ? 1.4 : 1,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1382,35 +1695,38 @@ class _RecommendationTile extends StatelessWidget {
                 icon: Icons.trending_up_rounded,
                 label: '${item['suggested_change']}',
               ),
-              if (item['mode_label'] != null)
-                _StatusChip(
-                  icon: Icons.route_rounded,
-                  label: '${item['mode_label']}',
-                ),
               if (item['priority'] != null)
                 _StatusChip(
                   icon: Icons.priority_high_rounded,
                   label: 'Priority: ${item['priority']}',
                 ),
-              if (item['benefit_level'] != null)
-                _StatusChip(
-                  icon: Icons.bolt_rounded,
-                  label: 'Benefit: ${item['benefit_level']}',
-                ),
-              _StatusChip(
-                icon: Icons.location_searching_rounded,
-                label: '${item['target_zone']}',
-              ),
               _StatusChip(
                 icon: Icons.health_and_safety_rounded,
                 label: 'Risk: ${item['risk']}',
               ),
-              _StatusChip(
-                icon: Icons.verified_rounded,
-                label: 'Confidence: ${item['confidence']}',
-              ),
+              if (item['mode_label'] != null &&
+                  item['mode'] == 'suggest_next_change')
+                _StatusChip(
+                  icon: Icons.route_rounded,
+                  label: '${item['mode_label']}',
+                ),
             ],
           ),
+          if (onFocusMaps != null && item['category'] != 'definitions') ...[
+            const SizedBox(height: 10),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                onPressed: onFocusMaps,
+                icon: const Icon(Icons.center_focus_strong_rounded, size: 18),
+                label: const Text('Focus maps'),
+              ),
+            ),
+          ],
+          if (mlEvidence != null) ...[
+            const SizedBox(height: 10),
+            _MlEvidenceBox(evidence: mlEvidence),
+          ],
           if (observations.isNotEmpty) ...[
             const SizedBox(height: 10),
             _RecommendationSection(
@@ -1492,6 +1808,111 @@ class _RecommendationTile extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _MlEvidenceBox extends StatelessWidget {
+  final Map<String, dynamic> evidence;
+
+  const _MlEvidenceBox({required this.evidence});
+
+  Color get accent {
+    switch (evidence['severity']) {
+      case 'warning':
+        return const Color(0xFFB45309);
+      case 'caution':
+        return const Color(0xFFCA8A04);
+      default:
+        return const Color(0xFF2563EB);
+    }
+  }
+
+  String get title {
+    switch (evidence['severity']) {
+      case 'warning':
+        return 'AI-assisted check: review carefully';
+      case 'caution':
+        return 'AI-assisted check: validate this area';
+      default:
+        return 'AI-assisted check';
+    }
+  }
+
+  String get message {
+    final raw = evidence['headline']?.toString();
+    if (raw == null || raw.isEmpty) {
+      return 'The model found calibration patterns worth reviewing against real logs.';
+    }
+    return raw
+        .replaceAll('ML model', 'The model')
+        .replaceAll('ML baseline', 'The model');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final flaggedMaps = evidence['flagged_maps'] is List
+        ? (evidence['flagged_maps'] as List)
+        : const [];
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.055),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: accent.withValues(alpha: 0.18)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.psychology_alt_rounded, size: 18, color: accent),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    color: accent,
+                    fontWeight: FontWeight.w900,
+                    height: 1.25,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            message,
+            style: const TextStyle(color: Color(0xFF475569), height: 1.35),
+          ),
+          if (flaggedMaps.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Maps to review: ${flaggedMaps.take(3).join(', ')}',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Color(0xFF475569),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+String _friendlyAiSeverity(dynamic value) {
+  switch (value?.toString()) {
+    case 'warning':
+      return 'review carefully';
+    case 'caution':
+      return 'validate';
+    default:
+      return 'supporting check';
   }
 }
 
@@ -1717,6 +2138,130 @@ class _CalibrationReportPanel extends StatelessWidget {
   }
 }
 
+class _MlDatasetPanel extends StatelessWidget {
+  final Map<String, dynamic> dataset;
+
+  const _MlDatasetPanel({required this.dataset});
+
+  Map<String, dynamic> _map(String key) {
+    final value = dataset[key];
+    return value is Map ? Map<String, dynamic>.from(value) : const {};
+  }
+
+  String _value(dynamic value) {
+    if (value == null) return '-';
+    if (value is num) {
+      return value % 1 == 0
+          ? value.toInt().toString()
+          : value.toStringAsFixed(2);
+    }
+    return '$value';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final summary = _map('summary');
+    final categories = summary['categories'] is Map
+        ? Map<String, dynamic>.from(summary['categories'] as Map)
+        : const <String, dynamic>{};
+    final topCategories = categories.entries.take(4).toList();
+    final status = dataset['status']?.toString() ?? 'feature_extraction_only';
+    final labelingRequired = dataset['labeling_required'] == true;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.psychology_alt_rounded,
+                color: Color(0xFF2563EB),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Text(
+                  'ML Dataset Foundation',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              _StatusChip(
+                icon: labelingRequired
+                    ? Icons.edit_note_rounded
+                    : Icons.check_circle_rounded,
+                label: labelingRequired
+                    ? 'Label review needed'
+                    : 'Training ready',
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Map-level features are now extracted from real calibration files. These rows are ready for review and future model training.',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: const Color(0xFF475569),
+              height: 1.35,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _StatusChip(
+                icon: Icons.dataset_rounded,
+                label: '${_value(summary['samples'])} samples',
+              ),
+              _StatusChip(
+                icon: Icons.view_column_rounded,
+                label: '${_value(summary['feature_count'])} features',
+              ),
+              _StatusChip(
+                icon: Icons.compare_arrows_rounded,
+                label: '${summary['mode'] ?? '-'}',
+              ),
+              _StatusChip(
+                icon: Icons.memory_rounded,
+                label: status.replaceAll('_', ' '),
+              ),
+            ],
+          ),
+          if (topCategories.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(
+              'Top categories',
+              style: Theme.of(
+                context,
+              ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final entry in topCategories)
+                  _StatusChip(
+                    icon: Icons.label_rounded,
+                    label: '${entry.key}: ${entry.value}',
+                  ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class _ReportChangeRow extends StatelessWidget {
   final Map<String, dynamic> change;
 
@@ -1780,8 +2325,19 @@ class _ReportChangeRow extends StatelessWidget {
 
 class _MapBrowser extends StatefulWidget {
   final List<dynamic> items;
+  final List<dynamic> recommendations;
+  final _MapFocusRequest? focusRequest;
+  final VoidCallback? onClearFocus;
+  final ValueChanged<Map<String, dynamic>>? onShowRecommendation;
 
-  const _MapBrowser({required this.items});
+  const _MapBrowser({
+    super.key,
+    required this.items,
+    this.recommendations = const [],
+    this.focusRequest,
+    this.onClearFocus,
+    this.onShowRecommendation,
+  });
 
   @override
   State<_MapBrowser> createState() => _MapBrowserState();
@@ -1789,9 +2345,48 @@ class _MapBrowser extends StatefulWidget {
 
 class _MapBrowserState extends State<_MapBrowser> {
   final searchController = TextEditingController();
+  final expansionController = ExpansibleController();
   String categoryFilter = 'all';
   String sortMode = 'changed';
   bool changedOnly = false;
+  _MapFocusRequest? activeFocus;
+
+  @override
+  void initState() {
+    super.initState();
+    activeFocus = widget.focusRequest;
+  }
+
+  @override
+  void didUpdateWidget(covariant _MapBrowser oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.focusRequest != null &&
+        widget.focusRequest != oldWidget.focusRequest) {
+      applyFocus(widget.focusRequest!);
+    } else if (widget.focusRequest == null && oldWidget.focusRequest != null) {
+      activeFocus = null;
+    }
+  }
+
+  void applyFocus(_MapFocusRequest focus) {
+    setState(() {
+      activeFocus = focus;
+      categoryFilter = focus.category;
+      changedOnly = false;
+      sortMode = 'changed';
+      searchController.clear();
+    });
+    expansionController.expand();
+  }
+
+  void clearFocus() {
+    setState(() {
+      activeFocus = null;
+      categoryFilter = 'all';
+      changedOnly = false;
+      searchController.clear();
+    });
+  }
 
   @override
   void dispose() {
@@ -1803,6 +2398,48 @@ class _MapBrowserState extends State<_MapBrowser> {
     return widget.items
         .map((item) => Map<String, dynamic>.from(item as Map))
         .toList();
+  }
+
+  List<Map<String, dynamic>> get allRecommendations {
+    return widget.recommendations
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
+  Map<String, dynamic>? relatedRecommendation(Map<String, dynamic> item) {
+    final category = item['category']?.toString();
+    final name = item['name']?.toString() ?? '';
+    final shortName = item['short_name']?.toString() ?? '';
+    if (category == null || category.isEmpty) return null;
+
+    Map<String, dynamic>? categoryMatch;
+    for (final recommendation in allRecommendations) {
+      if (recommendation['category']?.toString() != category) continue;
+      categoryMatch ??= recommendation;
+
+      final names = <String>{};
+      final maps = recommendation['maps'];
+      if (maps is List) {
+        names.addAll(
+          maps
+              .map((value) => value?.toString().trim() ?? '')
+              .where((value) => value.isNotEmpty),
+        );
+      }
+      final mlEvidence = recommendation['ml_evidence'];
+      if (mlEvidence is Map && mlEvidence['flagged_maps'] is List) {
+        names.addAll(
+          (mlEvidence['flagged_maps'] as List)
+              .map((value) => value?.toString().trim() ?? '')
+              .where((value) => value.isNotEmpty),
+        );
+      }
+      if (names.isEmpty || names.contains(name) || names.contains(shortName)) {
+        return recommendation;
+      }
+    }
+    return categoryMatch;
   }
 
   int changedCells(Map<String, dynamic> item) {
@@ -1838,6 +2475,7 @@ class _MapBrowserState extends State<_MapBrowser> {
     final query = searchController.text.trim().toLowerCase();
     final maps = allMaps.where((item) {
       final category = item['category']?.toString() ?? 'unknown';
+      if (activeFocus != null && !activeFocus!.matches(item)) return false;
       if (validCategory != 'all' && category != validCategory) return false;
       if (changedOnly && changedCells(item) == 0) return false;
       return matchesSearch(item, query);
@@ -1881,7 +2519,8 @@ class _MapBrowserState extends State<_MapBrowser> {
         child: Material(
           type: MaterialType.transparency,
           child: ExpansionTile(
-            initiallyExpanded: false,
+            controller: expansionController,
+            initiallyExpanded: activeFocus != null,
             tilePadding: const EdgeInsets.symmetric(
               horizontal: 14,
               vertical: 4,
@@ -1918,6 +2557,45 @@ class _MapBrowserState extends State<_MapBrowser> {
               ],
             ),
             children: [
+              if (activeFocus != null)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 4, 14, 10),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFF6FF),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFBFDBFE)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.center_focus_strong_rounded,
+                          color: Color(0xFF2563EB),
+                          size: 19,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Focused on ${activeFocus!.title} (${activeFocus!.category})',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Color(0xFF1D4ED8),
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                        TextButton.icon(
+                          onPressed: widget.onClearFocus,
+                          icon: const Icon(Icons.close_rounded, size: 18),
+                          label: const Text('Clear focus'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(14, 4, 14, 10),
                 child: Wrap(
@@ -2011,7 +2689,13 @@ class _MapBrowserState extends State<_MapBrowser> {
                   ),
                 )
               else
-                for (final item in maps.take(40)) _MapBrowserTile(item: item),
+                for (final item in maps.take(40))
+                  _MapBrowserTile(
+                    item: item,
+                    focused: activeFocus?.matches(item) ?? false,
+                    recommendation: relatedRecommendation(item),
+                    onShowRecommendation: widget.onShowRecommendation,
+                  ),
               if (maps.length > 40)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
@@ -2033,8 +2717,16 @@ class _MapBrowserState extends State<_MapBrowser> {
 
 class _MapBrowserTile extends StatelessWidget {
   final Map<String, dynamic> item;
+  final bool focused;
+  final Map<String, dynamic>? recommendation;
+  final ValueChanged<Map<String, dynamic>>? onShowRecommendation;
 
-  const _MapBrowserTile({required this.item});
+  const _MapBrowserTile({
+    required this.item,
+    this.focused = false,
+    this.recommendation,
+    this.onShowRecommendation,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -2080,13 +2772,17 @@ class _MapBrowserTile extends StatelessWidget {
     return Material(
       type: MaterialType.transparency,
       child: ExpansionTile(
+        backgroundColor: focused ? const Color(0xFFEFF6FF) : null,
+        collapsedBackgroundColor: focused ? const Color(0xFFEFF6FF) : null,
         tilePadding: const EdgeInsets.symmetric(horizontal: 14),
         childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
         leading: Icon(
           changedCells > 0
               ? Icons.difference_rounded
               : Icons.table_rows_rounded,
-          color: changedCells > 0
+          color: focused
+              ? const Color(0xFF2563EB)
+              : changedCells > 0
               ? const Color(0xFF0F766E)
               : const Color(0xFF64748B),
         ),
@@ -2112,6 +2808,15 @@ class _MapBrowserTile extends StatelessWidget {
         ),
         children: [
           _MapMetricStrip(item: item, diff: diff),
+          if (recommendation != null) ...[
+            const SizedBox(height: 10),
+            _RelatedRecommendationCard(
+              recommendation: recommendation!,
+              onPressed: onShowRecommendation == null
+                  ? null
+                  : () => onShowRecommendation!(recommendation!),
+            ),
+          ],
           const SizedBox(height: 10),
           _MapSurfacePreview(
             title: hasModified ? 'Modified surface' : 'Original surface',
@@ -2143,6 +2848,88 @@ class _MapBrowserTile extends StatelessWidget {
   }
 }
 
+class _RelatedRecommendationCard extends StatelessWidget {
+  final Map<String, dynamic> recommendation;
+  final VoidCallback? onPressed;
+
+  const _RelatedRecommendationCard({
+    required this.recommendation,
+    this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final mlEvidence = recommendation['ml_evidence'] is Map
+        ? Map<String, dynamic>.from(recommendation['ml_evidence'] as Map)
+        : null;
+    final risk = recommendation['risk']?.toString() ?? '-';
+    final priority = recommendation['priority']?.toString() ?? '-';
+    final accent = risk == 'high' || risk == 'medium-high'
+        ? const Color(0xFFB45309)
+        : const Color(0xFF2563EB);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.055),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: accent.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.tips_and_updates_rounded, size: 19, color: accent),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  recommendation['title']?.toString() ??
+                      'Related recommendation',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: accent, fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _StatusChip(
+                      icon: Icons.priority_high_rounded,
+                      label: 'Priority: $priority',
+                    ),
+                    _StatusChip(
+                      icon: Icons.health_and_safety_rounded,
+                      label: 'Risk: $risk',
+                    ),
+                    if (mlEvidence != null)
+                      _StatusChip(
+                        icon: Icons.psychology_alt_rounded,
+                        label:
+                            'AI: ${_friendlyAiSeverity(mlEvidence['severity'])}',
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          if (onPressed != null) ...[
+            const SizedBox(width: 8),
+            IconButton(
+              tooltip: 'View recommendation',
+              onPressed: onPressed,
+              icon: const Icon(Icons.open_in_new_rounded),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class _MapMetricStrip extends StatelessWidget {
   final Map<String, dynamic> item;
   final Map<String, dynamic> diff;
@@ -2159,6 +2946,9 @@ class _MapMetricStrip extends StatelessWidget {
     final affectedZone = item['affected_zone'] is List
         ? item['affected_zone'] as List
         : const [];
+    final mlPrediction = item['ml_prediction'] is Map
+        ? Map<String, dynamic>.from(item['ml_prediction'] as Map)
+        : const <String, dynamic>{};
     final factor = item['factor'];
     final offset = item['offset'];
     final hasScale =
@@ -2200,6 +2990,12 @@ class _MapMetricStrip extends StatelessWidget {
           _StatusChip(
             icon: Icons.functions_rounded,
             label: 'Delta max: ${diff['max_abs_delta'] ?? '-'}',
+          ),
+        if (_HomePageState._showDeveloperTools && mlPrediction.isNotEmpty)
+          _StatusChip(
+            icon: Icons.psychology_alt_rounded,
+            label:
+                'ML: ${mlPrediction['label'] ?? '-'} / ${mlPrediction['risk'] ?? '-'}',
           ),
       ],
     );
