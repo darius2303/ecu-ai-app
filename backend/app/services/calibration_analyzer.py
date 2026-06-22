@@ -266,6 +266,93 @@ def _build_tuner_summary(
     return summary[:4]
 
 
+def _build_analysis_verdict(
+    recommendations: list[dict[str, Any]],
+    changed_maps: list[dict[str, Any]],
+    binary_diff: dict[str, Any] | None,
+    ml_summary: dict[str, Any],
+    has_modified: bool,
+    definitions_count: int,
+) -> dict[str, Any]:
+    high_risk_recommendations = [
+        item for item in recommendations
+        if str(item.get("risk") or "").lower() in {"high", "medium-high"}
+    ]
+    high_priority_recommendations = [
+        item for item in recommendations
+        if str(item.get("priority") or "").lower() == "high"
+    ]
+    supporting_reviews = [
+        item for item in recommendations
+        if item.get("mode") == "review_supporting_map"
+    ]
+    bad_stage1_count = int(ml_summary.get("bad_stage1_count") or 0)
+    high_risk_count = int(ml_summary.get("high_risk_count") or 0)
+
+    if definitions_count == 0:
+        return {
+            "status": "missing_context",
+            "title": "Map definitions required",
+            "severity": "warning",
+            "message": "The binary was loaded, but the app cannot safely link changes to calibration maps without a map pack.",
+            "next_step": "Load a WinOLS/map-pack export before using the recommendations for tuning decisions.",
+        }
+
+    if not has_modified:
+        return {
+            "status": "planning_mode",
+            "title": "Planning review",
+            "severity": "info",
+            "message": "Only the original file was loaded, so recommendations are planning hints rather than validation of a finished tune.",
+            "next_step": "Add a tuned/current file when you want to compare real changes.",
+        }
+
+    if bad_stage1_count > 0 or high_risk_count > 0:
+        return {
+            "status": "high_risk_pattern",
+            "title": "High-risk tune pattern",
+            "severity": "danger",
+            "message": (
+                "The analysis found changes that should be validated carefully before any further calibration work."
+            ),
+            "next_step": "Review the focused maps, compare real logs, and confirm fuel/air/limiter coherence.",
+        }
+
+    if high_risk_recommendations or supporting_reviews:
+        titles = _unique_preserve_order(
+            [str(item.get("title") or "Recommendation") for item in high_priority_recommendations or high_risk_recommendations],
+            limit=2,
+        )
+        suffix = f" Main areas: {', '.join(titles)}." if titles else ""
+        return {
+            "status": "needs_validation",
+            "title": "Needs validation",
+            "severity": "warning",
+            "message": (
+                "The tune has meaningful changes and supporting maps should be checked before treating it as coherent."
+                + suffix
+            ),
+            "next_step": "Use Focus maps on the high-priority recommendations and verify the affected RPM/load zones in logs.",
+        }
+
+    if changed_maps or binary_diff:
+        return {
+            "status": "looks_coherent",
+            "title": "Looks coherent",
+            "severity": "success",
+            "message": "No major high-risk pattern was detected in the extracted map changes.",
+            "next_step": "Still validate AFR/lambda, EGT, knock/noise and limiter behavior on real logs.",
+        }
+
+    return {
+        "status": "no_clear_changes",
+        "title": "No clear mapped changes",
+        "severity": "info",
+        "message": "The app did not find meaningful changes in the extracted map definitions.",
+        "next_step": "Check that the correct original, tuned file and map pack were loaded.",
+    }
+
+
 def _build_calibration_report(
     summary: dict[str, Any],
     binary_diff: dict[str, Any] | None,
@@ -273,6 +360,7 @@ def _build_calibration_report(
     findings: list[dict[str, Any]],
     recommendations: list[dict[str, Any]],
     warnings: list[str],
+    verdict: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     changed_sorted = sorted(
         changed_maps,
@@ -332,6 +420,7 @@ def _build_calibration_report(
             "definitions_count": summary.get("definitions_count", 0),
             "binary_changed_percent": binary_diff.get("changed_percent", 0) if binary_diff else 0,
         },
+        "verdict": verdict or {},
         "tuner_summary": _build_tuner_summary(
             recommendations=recommendations,
             changed_maps=changed_maps,
@@ -339,7 +428,7 @@ def _build_calibration_report(
         ),
         "top_changes": top_changes,
         "key_findings": findings[:6],
-        "recommended_actions": recommendations[:6],
+        "recommended_actions": recommendations[:4],
         "validation_checks": validation_checks[:10],
         "warnings": warnings[:6],
     }
@@ -477,6 +566,15 @@ def analyze_calibration(
             "AI-assisted review flagged "
             f"{ml_summary.get('bad_stage1_count')} map(s) as possible risky Stage 1 patterns."
         )
+    verdict = _build_analysis_verdict(
+        recommendations=recommendations,
+        changed_maps=changed_maps,
+        binary_diff=binary_diff,
+        ml_summary=ml_summary,
+        has_modified=modified is not None,
+        definitions_count=len(definitions),
+    )
+    result["analysis_verdict"] = verdict
     result["report"] = _build_calibration_report(
         summary=summary,
         binary_diff=binary_diff,
@@ -484,6 +582,7 @@ def analyze_calibration(
         findings=sorted_findings,
         recommendations=recommendations,
         warnings=warnings,
+        verdict=verdict,
     )
 
     return result

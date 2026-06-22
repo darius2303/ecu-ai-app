@@ -533,6 +533,17 @@ def _matrix(value) -> list[list[float]]:
     return matrix
 
 
+def _is_renderable_surface(matrix: list[list[float]]) -> bool:
+    rows = len(matrix)
+    columns = min((len(row) for row in matrix), default=0)
+    if rows < 3 or columns < 3:
+        return False
+    values = [value for row in matrix for value in row[:columns]]
+    if len(values) < 9:
+        return False
+    return max(values) - min(values) > 0.000001
+
+
 def _lerp_color(start: str, end: str, amount: float):
     amount = max(0.0, min(1.0, amount))
     a = colors.HexColor(start)
@@ -560,7 +571,7 @@ def _draw_surface_preview(
 ) -> bool:
     rows = len(matrix)
     columns = min((len(row) for row in matrix), default=0)
-    if rows < 2 or columns < 2:
+    if not _is_renderable_surface(matrix):
         return False
 
     values = sorted(value for row in matrix for value in row[:columns])
@@ -658,7 +669,8 @@ def _visual_candidates(analysis: dict, recommendations: list[dict]) -> list[dict
             if address in seen_addresses:
                 continue
             surface = item.get("modified_surface_preview") or item.get("surface_preview")
-            if _matrix(surface):
+            matrix = _matrix(surface)
+            if _is_renderable_surface(matrix):
                 seen_addresses.add(address)
                 candidates.append(item)
                 break
@@ -685,6 +697,7 @@ def generate_calibration_report(
     tuner_summary = report.get("tuner_summary") or []
     top_changes = report.get("top_changes") or []
     checks = report.get("validation_checks") or []
+    verdict = report.get("verdict") or analysis.get("analysis_verdict") or {}
 
     c.setFillColor(PDF_DARK)
     c.roundRect(margin_x, y - 66, content_width, 66, 12, stroke=0, fill=1)
@@ -707,20 +720,29 @@ def generate_calibration_report(
     )
     y -= 88
 
-    y = _ensure_space(c, y, 95, width, height, margin_x)
+    y = _ensure_space(c, y, 110, width, height, margin_x)
+    context_top = y
+    context_height = 88
     c.setFillColor(PDF_PANEL)
     c.setStrokeColor(PDF_LINE)
-    c.roundRect(margin_x, y - 88, content_width, 88, 10, stroke=1, fill=1)
+    c.roundRect(margin_x, context_top - context_height, content_width, context_height, 10, stroke=1, fill=1)
     context_data = [
         ("Original file", summary.get("original_file") or "-"),
         ("Tuned/current file", summary.get("modified_file") or "Not provided"),
         ("Original size", _format_file_size(summary.get("original_size"))),
         ("Tuned size", _format_file_size(summary.get("modified_size"))),
     ]
-    y_context = _draw_key_value_grid(c, context_data, margin_x + 12, y - 18, content_width - 24)
-    y = min(y - 96, y_context - 10)
+    _draw_key_value_grid(c, context_data, margin_x + 12, context_top - 18, content_width - 24)
+    y = context_top - context_height - 26
 
     headline = escape(report.get("headline") or "Calibration analysis completed.")
+    verdict_title = escape(str(verdict.get("title") or ""))
+    verdict_message = escape(str(verdict.get("message") or ""))
+    verdict_text = (
+        f"<b>{verdict_title}</b> - {verdict_message}"
+        if verdict_title and verdict_message
+        else verdict_title or verdict_message
+    )
     headline_height = _paragraph_height(
         headline,
         content_width - 24,
@@ -728,42 +750,71 @@ def generate_calibration_report(
         text_color="#1E3A8A",
         bold=True,
     )
+    verdict_height = (
+        _paragraph_height(
+            verdict_text,
+            content_width - 24,
+            font_size=8.4,
+            text_color="#334155",
+        )
+        + 8
+        if verdict_text
+        else 0
+    )
     summary_bullets_height = _bullets_height(
         tuner_summary,
         content_width - 24,
         limit=4,
         font_size=8,
     ) if tuner_summary else 0
-    summary_card_height = 28 + headline_height + (8 + summary_bullets_height if tuner_summary else 0) + 12
+    summary_card_height = (
+        28
+        + headline_height
+        + verdict_height
+        + (8 + summary_bullets_height if tuner_summary else 0)
+        + 12
+    )
 
-    y = _ensure_space(c, y, summary_card_height + 48, width, height, margin_x)
+    y = _ensure_space(c, y, summary_card_height + 60, width, height, margin_x)
     _draw_modern_section_title(c, "Executive Summary", margin_x, y)
     y -= 22
+    summary_top = y
     c.setFillColor(colors.HexColor("#EFF6FF"))
     c.setStrokeColor(colors.HexColor("#BFDBFE"))
-    c.roundRect(margin_x, y - summary_card_height, content_width, summary_card_height, 10, stroke=1, fill=1)
-    y = _draw_paragraph(
+    c.roundRect(margin_x, summary_top - summary_card_height, content_width, summary_card_height, 10, stroke=1, fill=1)
+    content_y = _draw_paragraph(
         c,
         headline,
         margin_x + 12,
-        y - 15,
+        summary_top - 15,
         content_width - 24,
         font_size=10,
         text_color="#1E3A8A",
         bold=True,
     )
+    if verdict_text:
+        content_y -= 8
+        content_y = _draw_paragraph(
+            c,
+            verdict_text,
+            margin_x + 12,
+            content_y,
+            content_width - 24,
+            font_size=8.4,
+            text_color="#334155",
+        )
     if tuner_summary:
-        y -= 8
-        y = _draw_bullets(
+        content_y -= 8
+        _draw_bullets(
             c,
             tuner_summary,
             margin_x + 12,
-            y,
+            content_y,
             content_width - 24,
             limit=4,
             color=PDF_BLUE,
         )
-    y -= 22
+    y = summary_top - summary_card_height - 30
 
     y = _ensure_space(c, y, 110, width, height, margin_x)
     _draw_modern_section_title(c, "Key Metrics", margin_x, y)
@@ -792,9 +843,14 @@ def generate_calibration_report(
         card_gap = 10
         card_width = (content_width - card_gap) / 2
         card_height = 150
+        drawn_visuals = 0
         for index, item in enumerate(visual_maps):
             card_x = margin_x + index * (card_width + card_gap)
             card_y = y
+            surface = item.get("modified_surface_preview") or item.get("surface_preview")
+            surface_matrix = _matrix(surface)
+            if not _is_renderable_surface(surface_matrix):
+                continue
             c.setFillColor(PDF_PANEL)
             c.setStrokeColor(PDF_LINE)
             c.roundRect(card_x, card_y - card_height, card_width, card_height, 10, stroke=1, fill=1)
@@ -816,13 +872,14 @@ def generate_calibration_report(
             )
             if zone:
                 c.drawString(card_x + 10, card_y - 40, f"Zone: {zone[:46]}")
-            surface = item.get("modified_surface_preview") or item.get("surface_preview")
-            _draw_surface_preview(c, _matrix(surface), card_x + 10, card_y - 48, card_width - 20, 92)
-        y -= card_height + 22
+            if _draw_surface_preview(c, surface_matrix, card_x + 10, card_y - 48, card_width - 20, 92):
+                drawn_visuals += 1
+        if drawn_visuals:
+            y -= card_height + 22
 
     if recommendations:
-        y = _ensure_space(c, y, 95, width, height, margin_x)
-        _draw_modern_section_title(c, "Recommendation Sections", margin_x, y)
+        y = _ensure_space(c, y, 250, width, height, margin_x)
+        _draw_modern_section_title(c, "Priority Recommendations", margin_x, y)
         y -= 22
         for item in recommendations[:6]:
             column_width = (content_width - 34) / 2
@@ -848,9 +905,9 @@ def generate_calibration_report(
             actions_height = _bullets_height(item.get("actions") or [], column_width, limit=2, font_size=7.4)
             risks_height = _bullets_height(item.get("risks") or [], column_width, limit=2, font_size=7.4)
             card_height = max(
-                176,
+                164,
                 20
-                + 26
+                + 22
                 + reason_height
                 + 12
                 + target_height
@@ -873,15 +930,14 @@ def generate_calibration_report(
             priority_fill, priority_stroke, priority_text = _priority_color(item.get("priority"))
             badge_x = _draw_badge(c, f"Priority: {item.get('priority', '-')}", badge_x, card_top - 32, priority_fill, priority_stroke, priority_text)
             risk_fill, risk_stroke, risk_text = _risk_color(item.get("risk"))
-            badge_x = _draw_badge(c, f"Risk: {item.get('risk', '-')}", badge_x, card_top - 32, risk_fill, risk_stroke, risk_text)
             _draw_badge(
                 c,
-                f"Confidence: {item.get('confidence', '-')}",
+                f"Risk: {item.get('risk', '-')}",
                 badge_x,
                 card_top - 32,
-                colors.HexColor("#F1F5F9"),
-                colors.HexColor("#CBD5E1"),
-                PDF_MUTED,
+                risk_fill,
+                risk_stroke,
+                risk_text,
             )
             y_text = _draw_paragraph(
                 c,
@@ -950,6 +1006,16 @@ def generate_calibration_report(
         y = _ensure_space(c, y, 150, width, height, margin_x)
         _draw_modern_section_title(c, "Top Modified Maps", margin_x, y)
         y -= 24
+        compact_changes: list[dict] = []
+        name_counts: dict[str, int] = {}
+        for item in top_changes:
+            name = str(item.get("name") or "-")
+            if name_counts.get(name, 0) >= 2:
+                continue
+            name_counts[name] = name_counts.get(name, 0) + 1
+            compact_changes.append(item)
+            if len(compact_changes) >= 6:
+                break
         headers = ["Map", "Category", "Changed", "Max delta", "Zone"]
         col_widths = [190, 70, 52, 62, content_width - 374]
         row_height = 18
@@ -962,7 +1028,7 @@ def generate_calibration_report(
             c.drawString(current_x, y - 12, header)
             current_x += col_width
         y -= row_height
-        for item in top_changes[:8]:
+        for item in compact_changes:
             y = _ensure_space(c, y, 28, width, height, margin_x)
             c.setFillColor(colors.white)
             c.setStrokeColor(PDF_LINE)
@@ -987,7 +1053,7 @@ def generate_calibration_report(
         y = _ensure_space(c, y, 125, width, height, margin_x)
         _draw_modern_section_title(c, "Validation Checklist", margin_x, y)
         y -= 20
-        y = _draw_bullets(c, checks, margin_x, y, content_width, limit=10, color=PDF_TEAL, font_size=8)
+        y = _draw_bullets(c, checks, margin_x, y, content_width, limit=8, color=PDF_TEAL, font_size=8)
         y -= 12
 
     y = _ensure_space(c, y, 70, width, height, margin_x)

@@ -46,7 +46,7 @@ def _unpack_values(
     start = address
     end = start + (count * size)
     if start < 0 or end > len(content):
-        raise ValueError("Adresa depaseste dimensiunea fisierului.")
+        raise ValueError("The address exceeds the file size.")
 
     endian = "<" if byte_order == "little" else ">"
     values: list[float] = []
@@ -187,7 +187,7 @@ def extract_map_values(content: bytes, definition: MapDefinition) -> list[list[f
     end = start + total
 
     if start < 0 or end > len(content):
-        raise ValueError("Adresa hartii depaseste dimensiunea fisierului.")
+        raise ValueError("The map address exceeds the file size.")
 
     byte_order = _resolve_auto_byte_order(content, definition)
     endian = "<" if byte_order == "little" else ">"
@@ -221,7 +221,7 @@ def compare_values(original: list[list[float]], modified: list[list[float]]) -> 
     left = np.array(original, dtype=float)
     right = np.array(modified, dtype=float)
     if left.shape != right.shape:
-        raise ValueError("Dimensiunile hartilor nu coincid.")
+        raise ValueError("The map dimensions do not match.")
 
     delta = right - left
     changed = np.abs(delta) > 1e-9
@@ -268,7 +268,7 @@ def delta_preview(
     left = np.array(original, dtype=float)
     right = np.array(modified, dtype=float)
     if left.shape != right.shape:
-        raise ValueError("Dimensiunile hartilor nu coincid.")
+        raise ValueError("The map dimensions do not match.")
     delta = right - left
     preview = delta[:limit, :limit]
     return [[round(float(value), 6) for value in row] for row in preview]

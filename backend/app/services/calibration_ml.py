@@ -173,7 +173,7 @@ def enrich_recommendations_with_ml_evidence(
 
         actions = recommendation.setdefault("actions", [])
         if isinstance(actions, list) and ml_evidence["severity"] in {"warning", "caution"}:
-            actions.insert(0, "prioritize real-log validation for ML-flagged maps")
+            actions.insert(0, "prioritize real-log validation for AI-flagged maps")
 
         current_priority = str(recommendation.get("priority") or "low")
         if ml_evidence["severity"] == "warning":

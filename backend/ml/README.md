@@ -1,32 +1,70 @@
 # Calibration ML Baseline
 
-This folder contains the first ML baseline trained from reviewed calibration
-labeling CSV files.
+This folder contains the map-level ML baseline used by the backend as an AI-assisted second opinion.
 
-## 1. Build the training dataset
+The model does not replace the rule-based recommendation engine. It adds advisory evidence such as possible risky Stage 1 patterns, supporting-map validation needs, and map-level risk labels.
 
-Run from `backend`:
+## Runtime Artifacts
 
-```bash
+The runtime artifacts are stored in:
+
+```text
+backend/ml/artifacts/calibration_labels/
+```
+
+Expected files:
+
+```text
+calibration_label_model.joblib
+calibration_risk_model.joblib
+training_metrics.json
+```
+
+The backend loads them from:
+
+```text
+backend/app/services/calibration_ml.py
+```
+
+At runtime, predictions are attached to extracted maps as `ml_prediction`, aggregated into `ml_summary`, and summarized into recommendation-level `ml_evidence`.
+
+## Build Training Dataset
+
+Reviewed labeling CSV files should be placed in:
+
+```text
+backend/generated/labeled_datasets/
+```
+
+Then run from `backend`:
+
+```powershell
 python scripts/build_training_dataset.py
 ```
 
-This creates:
+Outputs:
 
 ```text
 generated/training_dataset.csv
 generated/training_dataset_report.json
 ```
 
-## 2. Train baseline classifiers
+`backend/generated/` is ignored by git. Do not commit local generated datasets.
+
+## Train Baseline Classifiers
 
 Run from `backend`:
 
-```bash
+```powershell
 python ml/train_calibration_label_model.py
 ```
 
-This creates:
+This trains two Random Forest classifiers:
+
+- `manual_label` -> calibration label prediction
+- `manual_risk_label` -> risk prediction
+
+Outputs:
 
 ```text
 ml/artifacts/calibration_labels/calibration_label_model.joblib
@@ -34,31 +72,32 @@ ml/artifacts/calibration_labels/calibration_risk_model.joblib
 ml/artifacts/calibration_labels/training_metrics.json
 ```
 
-The current model is a baseline. High accuracy is expected because the dataset
-is still small and many labels come from consistent review rules.
-
-## 3. Predict labels for a raw dataset
+## Predict Labels for a Raw Dataset
 
 Run from `backend`:
 
-```bash
-python ml/predict_calibration_labels.py ^
-  --dataset generated/raw_datasets/can_am_renegade_1000r_stage1.json ^
-  --output-csv generated/ml_predictions_renegade.csv ^
+```powershell
+python ml/predict_calibration_labels.py `
+  --dataset generated/raw_datasets/can_am_renegade_1000r_stage1.json `
+  --output-csv generated/ml_predictions_renegade.csv `
   --output-json generated/ml_predictions_renegade.json
 ```
 
-Predictions are decision-support only. They should not automatically decide
-tuning changes without tuner review and log validation.
+## Label Scope
 
-## Runtime integration
+Current labels include examples such as:
 
-The backend analysis flow loads these artifacts through:
+- `good_stage1_change`
+- `bad_stage1_change`
+- `torque_increase`
+- `fuel_support_needed`
+- `boost_support_needed`
+- `afr_lambda_risk`
+- `timing_risk`
+- `risky_limiter_change`
+- `safe_supporting_change`
+- `not_power_related`
 
-```text
-backend/app/services/calibration_ml.py
-```
+## Safety
 
-Predictions are attached to map results as `ml_prediction` and summarized in
-`ml_summary`. Rule-based recommendations remain the primary decision layer; ML
-is used only as a second opinion.
+Predictions are decision-support only. They should not automatically approve or reject tuning changes. Always validate with real logs, hardware limits, thermal behavior, drivetrain limits, AFR/lambda, EGT, and knock/noise checks.

@@ -43,7 +43,7 @@ def _parse_intel_hex(raw_text: str) -> bytes:
             upper_address = int.from_bytes(data, "big") << 16
 
     if not memory:
-        raise ValueError("Fisierul Intel HEX nu contine date.")
+        raise ValueError("The Intel HEX file does not contain data.")
 
     start = min(memory)
     end = max(memory)
@@ -77,7 +77,7 @@ def _parse_motorola_srec(raw_text: str) -> bytes:
             memory[address + offset] = value
 
     if not memory:
-        raise ValueError("Fisierul Motorola S-record nu contine date.")
+        raise ValueError("The Motorola S-record file does not contain data.")
 
     start = min(memory)
     end = max(memory)
@@ -86,7 +86,7 @@ def _parse_motorola_srec(raw_text: str) -> bytes:
 
 def read_ecu_binary(file_name: str, raw_bytes: bytes) -> EcuBinary:
     if not raw_bytes:
-        raise ValueError("Fisierul ECU este gol.")
+        raise ValueError("The ECU file is empty.")
 
     suffix = Path(file_name).suffix.lower()
     warnings: list[str] = []
@@ -103,7 +103,7 @@ def read_ecu_binary(file_name: str, raw_bytes: bytes) -> EcuBinary:
 
     if suffix in {".ols", ".olsx", ".kp"}:
         warnings.append(
-            "Format proprietar WinOLS detectat. Analiza binara poate fi imprecisa fara export/definitii dedicate."
+            "A proprietary WinOLS format was detected. Binary analysis may be imprecise without dedicated exports/definitions."
         )
 
     return EcuBinary(file_name, raw_bytes, "binary", warnings)

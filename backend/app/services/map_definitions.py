@@ -421,8 +421,8 @@ def _parse_winols_kp_definitions(raw_bytes: bytes) -> tuple[list[MapDefinition],
     intern = _read_kp_intern(raw_bytes)
     if intern is None:
         return [], [
-            "Fisier WinOLS .kp detectat, dar nu am gasit zona interna 'intern'.",
-            "Pentru analiza pe harti, exporta map definitions din WinOLS ca CSV/JSON.",
+            "The WinOLS .kp file could not be read because the internal map section was not found.",
+            "Export map definitions from WinOLS as CSV/JSON if the .kp parser cannot read this file.",
         ]
 
     definitions: list[MapDefinition] = []
@@ -444,17 +444,13 @@ def _parse_winols_kp_definitions(raw_bytes: bytes) -> tuple[list[MapDefinition],
         seen.add(key)
         definitions.append(definition)
 
-    warnings = [
-        "Fisier WinOLS .kp detectat. Parserul .kp este experimental si presupune valori u16 little-endian; factor/offset sunt extrase din record cand pattern-ul este valid.",
-    ]
     if definitions:
-        warnings.append(f"Am extras {len(definitions)} definitii de harti din map pack-ul .kp.")
-    else:
-        warnings.append("Nu am putut extrage definitii de harti din zona interna .kp.")
-        warnings.append(
-            "Pentru analiza pe harti, exporta map definitions din WinOLS ca CSV/JSON."
-        )
-    return definitions, warnings
+        return definitions, []
+
+    return [], [
+        "No usable map definitions could be extracted from the WinOLS .kp file.",
+        "Export map definitions from WinOLS as CSV/JSON if this map pack cannot be parsed.",
+    ]
 
 
 def _parse_kp_metadata(raw_bytes: bytes) -> tuple[list[MapDefinition], list[str]]:
@@ -479,14 +475,12 @@ def _parse_kp_metadata(raw_bytes: bytes) -> tuple[list[MapDefinition], list[str]
     ]
     categories = list(dict.fromkeys(categories))
 
-    if categories:
-        warnings.append("Categorii gasite in .kp: " + ", ".join(categories) + ".")
     return definitions, warnings
 
 
 def parse_map_definitions(file_name: str, raw_bytes: bytes) -> tuple[list[MapDefinition], list[str]]:
     if not raw_bytes:
-        return [], ["Fisierul de definitii este gol."]
+        return [], ["The definitions file is empty."]
 
     suffix = Path(file_name).suffix.lower()
     if suffix == ".kp":
@@ -500,12 +494,12 @@ def parse_map_definitions(file_name: str, raw_bytes: bytes) -> tuple[list[MapDef
         if isinstance(payload, dict):
             payload = payload.get("maps") or payload.get("definitions") or []
         if not isinstance(payload, list):
-            raise ValueError("JSON-ul de definitii trebuie sa contina o lista de harti.")
+            raise ValueError("The definitions JSON must contain a list of maps.")
         rows = [item for item in payload if isinstance(item, dict)]
     else:
         reader = csv.DictReader(StringIO(text))
         if not reader.fieldnames:
-            raise ValueError("CSV-ul de definitii trebuie sa aiba header.")
+            raise ValueError("The definitions CSV must include a header row.")
         rows = list(reader)
 
     definitions: list[MapDefinition] = []
@@ -514,14 +508,14 @@ def parse_map_definitions(file_name: str, raw_bytes: bytes) -> tuple[list[MapDef
         try:
             definition = _definition_from_row(row, index)
         except ValueError as exc:
-            warnings.append(f"Definitia {index} a fost ignorata: {exc}")
+            warnings.append(f"Definition {index} was skipped: {exc}")
             continue
         if definition.rows <= 0 or definition.columns <= 0:
-            warnings.append(f"Definitia {definition.name} are dimensiuni invalide.")
+            warnings.append(f"Definition {definition.name} has invalid dimensions.")
             continue
         definitions.append(definition)
 
     if not definitions:
-        warnings.append("Nu am gasit definitii de harti utilizabile.")
+        warnings.append("No usable map definitions were found.")
 
     return definitions, warnings

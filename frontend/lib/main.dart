@@ -797,6 +797,9 @@ class _HomePageState extends State<HomePage> {
     final recommendations = asList(calibrationResult?['recommendations']);
     final warnings = asList(calibrationResult?['warnings']);
     final report = asStringMap(calibrationResult?['report']);
+    final verdict =
+        asStringMap(calibrationResult?['analysis_verdict']) ??
+        asStringMap(report?['verdict']);
     final mlDataset = asStringMap(calibrationResult?['ml_dataset']);
     final hasResult =
         calibrationResult != null ||
@@ -856,6 +859,10 @@ class _HomePageState extends State<HomePage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (verdict != null) ...[
+            _AnalysisVerdictCard(verdict: verdict),
+            const SizedBox(height: 14),
+          ],
           if (summary != null)
             LayoutBuilder(
               builder: (context, constraints) {
@@ -1427,6 +1434,106 @@ class _InlineNotice extends StatelessWidget {
   }
 }
 
+class _AnalysisVerdictCard extends StatelessWidget {
+  final Map<String, dynamic> verdict;
+
+  const _AnalysisVerdictCard({required this.verdict});
+
+  Color get accent {
+    switch (verdict['severity']?.toString()) {
+      case 'danger':
+        return const Color(0xFFB91C1C);
+      case 'warning':
+        return const Color(0xFFB45309);
+      case 'success':
+        return const Color(0xFF0F766E);
+      default:
+        return const Color(0xFF2563EB);
+    }
+  }
+
+  IconData get icon {
+    switch (verdict['severity']?.toString()) {
+      case 'danger':
+        return Icons.warning_amber_rounded;
+      case 'warning':
+        return Icons.rule_rounded;
+      case 'success':
+        return Icons.verified_rounded;
+      default:
+        return Icons.insights_rounded;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final title = verdict['title']?.toString() ?? 'Analysis summary';
+    final message = verdict['message']?.toString() ?? '';
+    final nextStep = verdict['next_step']?.toString() ?? '';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.075),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: accent.withValues(alpha: 0.24)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: accent),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: accent,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 17,
+                  ),
+                ),
+                if (message.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    message,
+                    style: const TextStyle(
+                      color: Color(0xFF334155),
+                      height: 1.35,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+                if (nextStep.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'Next step: $nextStep',
+                    style: const TextStyle(
+                      color: Color(0xFF475569),
+                      height: 1.35,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _CompactMetric extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -1727,15 +1834,6 @@ class _RecommendationTile extends StatelessWidget {
             const SizedBox(height: 10),
             _MlEvidenceBox(evidence: mlEvidence),
           ],
-          if (observations.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            _RecommendationSection(
-              title: 'Observations',
-              icon: Icons.visibility_rounded,
-              items: observations,
-              color: const Color(0xFF2563EB),
-            ),
-          ],
           if (actions.isNotEmpty) ...[
             const SizedBox(height: 8),
             _RecommendationSection(
@@ -1745,67 +1843,130 @@ class _RecommendationTile extends StatelessWidget {
               color: const Color(0xFF0F766E),
             ),
           ],
-          if (benefits.isNotEmpty || risks.isNotEmpty) ...[
+          if (observations.isNotEmpty ||
+              benefits.isNotEmpty ||
+              risks.isNotEmpty ||
+              maps.isNotEmpty ||
+              checks.isNotEmpty) ...[
             const SizedBox(height: 8),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final isWide = constraints.maxWidth >= 620;
-                return Wrap(
-                  spacing: 10,
-                  runSpacing: 8,
-                  children: [
-                    if (benefits.isNotEmpty)
-                      SizedBox(
-                        width: isWide
-                            ? (constraints.maxWidth - 10) / 2
-                            : constraints.maxWidth,
-                        child: _RecommendationSection(
-                          title: 'Benefits',
-                          icon: Icons.add_chart_rounded,
-                          items: benefits,
-                          color: const Color(0xFF0F766E),
-                          maxItems: 2,
-                        ),
-                      ),
-                    if (risks.isNotEmpty)
-                      SizedBox(
-                        width: isWide
-                            ? (constraints.maxWidth - 10) / 2
-                            : constraints.maxWidth,
-                        child: _RecommendationSection(
-                          title: 'Risks',
-                          icon: Icons.warning_amber_rounded,
-                          items: risks,
-                          color: const Color(0xFFB45309),
-                          maxItems: 2,
-                        ),
-                      ),
-                  ],
-                );
-              },
-            ),
-          ],
-          if (maps.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text(
-              'Maps: ${maps.take(4).join(', ')}',
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Color(0xFF334155),
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-          if (checks.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            _AlignedBulletList(
-              items: checks.take(3).toList(),
-              color: const Color(0xFF0F766E),
-              icon: Icons.check_rounded,
+            _RecommendationDetails(
+              observations: observations,
+              benefits: benefits,
+              risks: risks,
+              maps: maps,
+              checks: checks,
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _RecommendationDetails extends StatelessWidget {
+  final List<dynamic> observations;
+  final List<dynamic> benefits;
+  final List<dynamic> risks;
+  final List<dynamic> maps;
+  final List<dynamic> checks;
+
+  const _RecommendationDetails({
+    required this.observations,
+    required this.benefits,
+    required this.risks,
+    required this.maps,
+    required this.checks,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          tilePadding: EdgeInsets.zero,
+          childrenPadding: const EdgeInsets.only(top: 2),
+          dense: true,
+          leading: const Icon(Icons.expand_circle_down_rounded, size: 19),
+          title: const Text(
+            'Details',
+            style: TextStyle(fontWeight: FontWeight.w900),
+          ),
+          children: [
+            if (observations.isNotEmpty)
+              _RecommendationSection(
+                title: 'Observations',
+                icon: Icons.visibility_rounded,
+                items: observations,
+                color: const Color(0xFF2563EB),
+                maxItems: 3,
+              ),
+            if (benefits.isNotEmpty || risks.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final isWide = constraints.maxWidth >= 620;
+                  return Wrap(
+                    spacing: 10,
+                    runSpacing: 8,
+                    children: [
+                      if (benefits.isNotEmpty)
+                        SizedBox(
+                          width: isWide
+                              ? (constraints.maxWidth - 10) / 2
+                              : constraints.maxWidth,
+                          child: _RecommendationSection(
+                            title: 'Benefits',
+                            icon: Icons.add_chart_rounded,
+                            items: benefits,
+                            color: const Color(0xFF0F766E),
+                            maxItems: 3,
+                          ),
+                        ),
+                      if (risks.isNotEmpty)
+                        SizedBox(
+                          width: isWide
+                              ? (constraints.maxWidth - 10) / 2
+                              : constraints.maxWidth,
+                          child: _RecommendationSection(
+                            title: 'Risks',
+                            icon: Icons.warning_amber_rounded,
+                            items: risks,
+                            color: const Color(0xFFB45309),
+                            maxItems: 3,
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
+            ],
+            if (maps.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Maps: ${maps.take(6).join(', ')}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF334155),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+            if (checks.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              _AlignedBulletList(
+                items: checks.take(4).toList(),
+                color: const Color(0xFF0F766E),
+                icon: Icons.check_rounded,
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -2355,6 +2516,7 @@ class _MapBrowserState extends State<_MapBrowser> {
   void initState() {
     super.initState();
     activeFocus = widget.focusRequest;
+    changedOnly = _hasChangedItems(widget.items);
   }
 
   @override
@@ -2365,6 +2527,8 @@ class _MapBrowserState extends State<_MapBrowser> {
       applyFocus(widget.focusRequest!);
     } else if (widget.focusRequest == null && oldWidget.focusRequest != null) {
       activeFocus = null;
+    } else if (widget.items != oldWidget.items && activeFocus == null) {
+      changedOnly = _hasChangedItems(widget.items);
     }
   }
 
@@ -2383,7 +2547,7 @@ class _MapBrowserState extends State<_MapBrowser> {
     setState(() {
       activeFocus = null;
       categoryFilter = 'all';
-      changedOnly = false;
+      changedOnly = _hasChangedItems(widget.items);
       searchController.clear();
     });
   }
@@ -2398,6 +2562,14 @@ class _MapBrowserState extends State<_MapBrowser> {
     return widget.items
         .map((item) => Map<String, dynamic>.from(item as Map))
         .toList();
+  }
+
+  bool _hasChangedItems(List<dynamic> items) {
+    return items.any((item) {
+      if (item is! Map) return false;
+      final diff = Map<String, dynamic>.from((item['diff'] as Map?) ?? {});
+      return ((diff['changed_cells'] as num?) ?? 0).toInt() > 0;
+    });
   }
 
   List<Map<String, dynamic>> get allRecommendations {

@@ -22,8 +22,8 @@ def _numbers_from_line(line: str) -> list[float]:
 
 def parse_winols_map_text(raw_text: str, map_type: str = "soi") -> dict[str, Any]:
     """
-    Parseaza un tabel copiat din WinOLS/OLS-like text: linie de axa X optionala,
-    apoi randuri cu axa RPM in prima coloana si valorile hartii dupa ea.
+    Parse a table copied from WinOLS/OLS-like text: optional X-axis line,
+    followed by rows with RPM in the first column and map values after it.
     """
     numeric_lines = [
         _numbers_from_line(line)
@@ -32,7 +32,7 @@ def parse_winols_map_text(raw_text: str, map_type: str = "soi") -> dict[str, Any
     numeric_lines = [line for line in numeric_lines if len(line) >= 2]
 
     if not numeric_lines:
-        raise ValueError("Nu am gasit valori numerice in harta copiata.")
+        raise ValueError("No numeric values were found in the copied map.")
 
     best_start = 0
     best_end = 0
@@ -60,11 +60,11 @@ def parse_winols_map_text(raw_text: str, map_type: str = "soi") -> dict[str, Any
         data_lines = [line for line in numeric_lines if len(line) >= 4]
 
     if len(data_lines) < 2:
-        raise ValueError("Harta trebuie sa contina cel putin doua randuri de date.")
+        raise ValueError("The map must contain at least two data rows.")
 
     value_count = min(len(line) - 1 for line in data_lines)
     if value_count < 2:
-        raise ValueError("Harta trebuie sa contina cel putin doua coloane de valori.")
+        raise ValueError("The map must contain at least two value columns.")
 
     rpm_axis = [float(line[0]) for line in data_lines]
     values = [line[1:value_count + 1] for line in data_lines]
@@ -89,11 +89,11 @@ def parse_winols_map_text(raw_text: str, map_type: str = "soi") -> dict[str, Any
 
 def decode_map_file_content(raw_bytes: bytes) -> str:
     if not raw_bytes:
-        raise ValueError("Fisierul incarcat este gol.")
+        raise ValueError("The uploaded file is empty.")
 
     if raw_bytes.count(b"\x00") > max(8, len(raw_bytes) // 20):
         raise ValueError(
-            "Fisierul pare binar. Exporta harta ca TXT/CSV din WinOLS si incearca din nou."
+            "The file appears to be binary. Export the map as TXT/CSV from WinOLS and try again."
         )
 
     for encoding in ("utf-8-sig", "utf-8", "cp1252", "latin-1"):
@@ -104,7 +104,7 @@ def decode_map_file_content(raw_bytes: bytes) -> str:
         if decoded.strip():
             return decoded
 
-    raise ValueError("Nu am putut decoda fisierul ca text.")
+    raise ValueError("The file could not be decoded as text.")
 
 
 def ensure_calibration_map(data: Any) -> dict[str, Any] | None:
@@ -136,11 +136,11 @@ def derive_features_from_map(
     map_type = calibration_map.get("map_type") or "soi"
 
     if values.ndim != 2:
-        raise ValueError("Valorile hartii trebuie sa fie o matrice 2D.")
+        raise ValueError("Map values must be a 2D matrix.")
     if values.shape[0] != len(rpm_axis):
-        raise ValueError("Numarul de randuri nu corespunde axei RPM.")
+        raise ValueError("The row count does not match the RPM axis.")
     if values.shape[1] != len(load_axis):
-        raise ValueError("Numarul de coloane nu corespunde axei load/IQ.")
+        raise ValueError("The column count does not match the load/IQ axis.")
 
     high_load_start = max(0, int(values.shape[1] * 0.65))
     high_rpm_start = max(0, int(values.shape[0] * 0.45))

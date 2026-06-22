@@ -1,17 +1,65 @@
-# frontend
+# ECU Calibration Analyzer Frontend
 
-A new Flutter project.
+Flutter desktop frontend for the ECU Calibration Analyzer.
 
-## Getting Started
+The UI is focused on the final tuner workflow:
 
-This project is a starting point for a Flutter application.
+- load calibration files
+- run analysis
+- review the global verdict
+- inspect priority recommendations
+- focus related maps
+- inspect 3D map previews
+- export a PDF report
 
-A few resources to get you started if this is your first Flutter project:
+Developer dataset/export tools are hidden by default in the app code.
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+## Requirements
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+- Flutter SDK
+- Windows desktop support enabled
+- Backend API running at `http://127.0.0.1:8000`
+
+## Run
+
+From `frontend`:
+
+```powershell
+flutter pub get
+flutter run -d windows
+```
+
+## Checks
+
+```powershell
+dart analyze
+flutter test
+```
+
+## Important Files
+
+```text
+lib/main.dart                  Main app UI and interaction flow
+lib/services/api_service.dart  Backend API client
+test/widget_test.dart          Basic widget smoke tests
+```
+
+## UI Flow
+
+1. Select the original calibration file.
+2. Optionally select the tuned/current file.
+3. Optionally select a map pack/definitions file (`.kp`, `.csv`, `.json`).
+4. Enter basic vehicle context when available.
+5. Run analysis.
+6. Review:
+   - global verdict
+   - tuner report summary
+   - compact recommendation cards
+   - AI-assisted checks
+   - focused map browser
+   - related map/recommendation links
+7. Export PDF report.
+
+## Notes
+
+The frontend does not perform calibration logic by itself. Binary parsing, map extraction, recommendations, AI-assisted review, and PDF generation are handled by the backend.

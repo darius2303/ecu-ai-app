@@ -39,7 +39,7 @@ def parse_map_file(data: MapFileInput):
     try:
         raw_bytes = base64.b64decode(data.content_base64, validate=True)
     except (binascii.Error, ValueError) as exc:
-        raise HTTPException(status_code=400, detail="Fisierul nu a putut fi decodat.") from exc
+        raise HTTPException(status_code=400, detail="The file could not be decoded.") from exc
 
     if len(raw_bytes) > 2_000_000:
         raise HTTPException(status_code=413, detail="The file is too large for text import.")
@@ -162,4 +162,3 @@ def calibration_labeling_template(data: CalibrationAnalyzeInput):
         media_type="text/csv",
         filename="calibration_labeling_template.csv",
     )
-
