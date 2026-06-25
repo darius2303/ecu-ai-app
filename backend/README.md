@@ -27,6 +27,16 @@ Default local URL:
 http://127.0.0.1:8000
 ```
 
+## Run Tests
+
+From `backend`:
+
+```powershell
+python -m pytest tests
+```
+
+The backend test suite covers ECU file decoding, CSV/JSON map definition parsing, map extraction and comparison, central calibration analysis behavior, verdict generation, recommendation logic, ML fallback behavior, negative API validation, the main calibration analysis endpoint, and PDF report generation.
+
 ## Main Endpoints
 
 ```text
