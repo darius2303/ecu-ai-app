@@ -35,7 +35,25 @@ From `backend`:
 python -m pytest tests
 ```
 
-The backend test suite covers ECU file decoding, CSV/JSON map definition parsing, map extraction and comparison, central calibration analysis behavior, verdict generation, recommendation logic, ML fallback behavior, negative API validation, the main calibration analysis endpoint, and PDF report generation.
+The backend test suite covers ECU file decoding, CSV/JSON map definition parsing, map extraction and comparison, central calibration analysis behavior, verdict generation, recommendation logic, ML fallback behavior, negative API validation, the main calibration analysis endpoint, PDF report generation, and end-to-end calibration workflows.
+
+The main E2E scenario also creates a local evidence pack under:
+
+```text
+backend/generated/e2e/e2e_01_complete_analysis/
+```
+
+Useful files in that folder:
+
+- `visual_evidence.html` - browser-friendly visual evidence for the complete workflow
+- `visual_summary.svg` - compact visual summary
+- `analysis.json` - raw analysis response
+- `e2e_summary.json` - checked steps and snapshot
+- `calibration_tuner_report.pdf` - generated PDF report
+
+`backend/generated/` is ignored by git, so these artifacts are meant for local inspection and documentation screenshots.
+
+Additional E2E scenarios cover original-only planning mode, missing map-pack context, and invalid uploaded files.
 
 ## Main Endpoints
 

@@ -11,6 +11,29 @@ from typing import Any
 DEFAULT_INPUT_DIR = Path("generated/labeled_datasets")
 DEFAULT_OUTPUT_PATH = Path("generated/training_dataset.csv")
 DEFAULT_REPORT_PATH = Path("generated/training_dataset_report.json")
+MIN_RECOMMENDED_CLASS_ROWS = 15
+
+LABEL_OPTIONS = [
+    "bad_stage1_change",
+    "good_stage1_change",
+    "safe_supporting_change",
+    "risky_limiter_change",
+    "torque_increase",
+    "fuel_support_needed",
+    "boost_support_needed",
+    "afr_lambda_risk",
+    "timing_risk",
+    "not_power_related",
+    "unknown",
+]
+
+RISK_LABEL_OPTIONS = [
+    "low",
+    "medium",
+    "medium-high",
+    "high",
+    "unknown",
+]
 
 
 def _truthy(value: str | None) -> bool:
@@ -90,6 +113,61 @@ def _counter(rows: list[dict[str, str]], key: str) -> dict[str, int]:
     return dict(Counter(str(row.get(key) or "unknown") for row in rows))
 
 
+def _nested_counter(rows: list[dict[str, str]], outer: str, inner: str) -> dict[str, dict[str, int]]:
+    matrix: dict[str, Counter[str]] = {}
+    for row in rows:
+        outer_value = str(row.get(outer) or "unknown")
+        inner_value = str(row.get(inner) or "unknown")
+        matrix.setdefault(outer_value, Counter())[inner_value] += 1
+    return {
+        key: dict(counter)
+        for key, counter in sorted(matrix.items())
+    }
+
+
+def _rare_counts(counts: dict[str, int], minimum: int) -> dict[str, int]:
+    return {
+        key: value
+        for key, value in sorted(counts.items(), key=lambda item: (item[1], item[0]))
+        if value < minimum
+    }
+
+
+def _unknown_values(rows: list[dict[str, str]], key: str, allowed: set[str]) -> dict[str, int]:
+    values = Counter(
+        str(row.get(key) or "").strip()
+        for row in rows
+        if str(row.get(key) or "").strip() and str(row.get(key) or "").strip() not in allowed
+    )
+    return dict(values)
+
+
+def _collection_targets(label_counts: dict[str, int]) -> list[dict[str, Any]]:
+    targets = []
+    important_labels = [
+        "bad_stage1_change",
+        "boost_support_needed",
+        "safe_supporting_change",
+        "not_power_related",
+        "timing_risk",
+        "afr_lambda_risk",
+        "fuel_support_needed",
+    ]
+    for label in important_labels:
+        current = int(label_counts.get(label, 0))
+        if current >= MIN_RECOMMENDED_CLASS_ROWS:
+            continue
+        targets.append(
+            {
+                "manual_label": label,
+                "current_rows": current,
+                "target_rows": MIN_RECOMMENDED_CLASS_ROWS,
+                "needed_rows": MIN_RECOMMENDED_CLASS_ROWS - current,
+            }
+        )
+    return targets
+
+
 def _build_report(
     rows: list[dict[str, str]],
     files: list[dict[str, Any]],
@@ -99,6 +177,10 @@ def _build_report(
     risk_counts = _counter(rows, "manual_risk_label")
     category_counts = _counter(rows, "map_category")
     source_counts = _counter(rows, "source_csv")
+    rare_labels = _rare_counts(label_counts, MIN_RECOMMENDED_CLASS_ROWS)
+    rare_categories = _rare_counts(category_counts, MIN_RECOMMENDED_CLASS_ROWS)
+    invalid_labels = _unknown_values(rows, "manual_label", set(LABEL_OPTIONS))
+    invalid_risk_labels = _unknown_values(rows, "manual_risk_label", set(RISK_LABEL_OPTIONS))
     warnings: list[str] = []
 
     if not rows:
@@ -112,6 +194,22 @@ def _build_report(
             )
     if len(label_counts) < 3:
         warnings.append("Dataset has fewer than 3 label classes; model quality will be limited.")
+    if rare_labels:
+        warnings.append(
+            "Some labels have fewer than "
+            f"{MIN_RECOMMENDED_CLASS_ROWS} reviewed rows; collect more examples for these classes."
+        )
+    if invalid_labels:
+        warnings.append("Dataset contains manual labels outside the approved label schema.")
+    if invalid_risk_labels:
+        warnings.append("Dataset contains risk labels outside the approved risk schema.")
+    if source_counts:
+        top_source, top_count = max(source_counts.items(), key=lambda item: item[1])
+        if len(rows) and top_count / len(rows) >= 0.30:
+            warnings.append(
+                f"Source {top_source} contributes {round((top_count / len(rows)) * 100, 2)}% "
+                "of the dataset; add more vehicles/ECUs to reduce source dominance."
+            )
 
     return {
         "output": str(output_path),
@@ -121,6 +219,17 @@ def _build_report(
         "manual_risk_label_counts": risk_counts,
         "map_category_counts": category_counts,
         "source_csv_counts": source_counts,
+        "rare_manual_labels": rare_labels,
+        "rare_map_categories": rare_categories,
+        "invalid_manual_labels": invalid_labels,
+        "invalid_manual_risk_labels": invalid_risk_labels,
+        "label_by_category": _nested_counter(rows, "map_category", "manual_label"),
+        "risk_by_label": _nested_counter(rows, "manual_label", "manual_risk_label"),
+        "recommended_next_samples": _collection_targets(label_counts),
+        "quality_targets": {
+            "minimum_rows_per_important_label": MIN_RECOMMENDED_CLASS_ROWS,
+            "note": "Targets are curation goals, not hard requirements for running the prototype.",
+        },
         "warnings": warnings,
     }
 

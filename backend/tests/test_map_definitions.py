@@ -62,3 +62,32 @@ def test_skips_invalid_csv_rows_and_reports_warning():
     assert definitions == []
     assert any("Definition 1 was skipped" in warning for warning in warnings)
     assert "No usable map definitions were found." in warnings
+
+
+def test_infers_category_and_normalizes_csv_aliases():
+    csv_content = (
+        "map,addr,height,width,type,endian,scale,add,units\n"
+        'Volumetric efficiency,32,1,2,u16,le,"0,25",2,%\n'
+    ).encode()
+
+    definitions, warnings = parse_map_definitions("maps.csv", csv_content)
+
+    assert warnings == []
+    assert len(definitions) == 1
+    definition = definitions[0]
+    assert definition.name == "Volumetric efficiency"
+    assert definition.address == 32
+    assert definition.rows == 1
+    assert definition.columns == 2
+    assert definition.byte_order == "little"
+    assert definition.factor == 0.25
+    assert definition.offset == 2
+    assert definition.category == "air_fuel"
+
+
+def test_kp_file_without_internal_section_returns_actionable_warnings():
+    definitions, warnings = parse_map_definitions("mappack.kp", b"not-a-zip")
+
+    assert definitions == []
+    assert any("WinOLS .kp file could not be read" in warning for warning in warnings)
+    assert any("Export map definitions from WinOLS as CSV/JSON" in warning for warning in warnings)

@@ -57,6 +57,20 @@ python -m pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
+Run the automated backend suite:
+
+```powershell
+python -m pytest tests
+```
+
+The main end-to-end backend scenario writes local evidence under:
+
+```text
+backend/generated/e2e/e2e_01_complete_analysis/
+```
+
+Open `visual_evidence.html` to inspect the visual E2E summary generated from the same analysis and report workflow. Additional E2E cases cover original-only planning mode, missing map-pack context, and invalid uploaded files.
+
 The frontend expects the API at:
 
 ```text

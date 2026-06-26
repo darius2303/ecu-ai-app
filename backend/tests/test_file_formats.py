@@ -32,3 +32,16 @@ def test_reads_motorola_s_record_file():
 def test_rejects_empty_ecu_file():
     with pytest.raises(ValueError, match="empty"):
         read_ecu_binary("empty.bin", b"")
+
+
+def test_rejects_invalid_intel_hex_record():
+    with pytest.raises(ValueError, match="Intel HEX"):
+        read_ecu_binary("broken.hex", b"not an intel hex file")
+
+
+def test_marks_proprietary_winols_files_with_warning():
+    ecu = read_ecu_binary("project.ols", b"\x01\x02\x03")
+
+    assert ecu.file_format == "binary"
+    assert ecu.content == b"\x01\x02\x03"
+    assert any("proprietary WinOLS" in warning for warning in ecu.warnings)

@@ -97,6 +97,66 @@ def test_calibration_report_endpoint_returns_pdf():
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/pdf"
     assert response.content.startswith(b"%PDF")
+    assert response.content.rstrip().endswith(b"%%EOF")
+    assert len(response.content) > 2_000
+
+
+def test_calibration_ml_dataset_endpoint_returns_feature_rows():
+    original = struct.pack(">HHHH", 100, 200, 300, 400)
+    modified = struct.pack(">HHHH", 100, 260, 300, 500)
+    definitions = (
+        "name,address,rows,columns,data_type,byte_order,factor,offset,unit\n"
+        "Torque request,0,2,2,u16,big,0.1,0,Nm\n"
+    ).encode()
+
+    response = client.post(
+        "/api/calibration/ml-dataset",
+        json={
+            "original_file": _uploaded("original.bin", original),
+            "modified_file": _uploaded("modified.bin", modified),
+            "definitions_file": _uploaded("maps.csv", definitions),
+            "engine_displacement": 1.0,
+            "fuel_type": "petrol",
+            "is_turbo": False,
+            "stock_hp": 78,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/json")
+    payload = response.json()
+    assert payload["version"] == "calibration-features-v1"
+    assert payload["summary"]["samples"] == 1
+    assert payload["rows"][0]["map_category"] == "torque"
+    assert payload["rows"][0]["changed_percent"] == 50.0
+    assert payload["rows"][0]["include_for_training"] is False
+
+
+def test_calibration_labeling_template_endpoint_returns_review_columns():
+    original = struct.pack(">HHHH", 100, 200, 300, 400)
+    definitions = (
+        "name,address,rows,columns,data_type,byte_order,factor,offset,unit\n"
+        "Injection base map,0,2,2,u16,big,0.1,0,mg\n"
+    ).encode()
+
+    response = client.post(
+        "/api/calibration/labeling-template",
+        json={
+            "original_file": _uploaded("original.bin", original),
+            "definitions_file": _uploaded("maps.csv", definitions),
+            "engine_displacement": 1.0,
+            "fuel_type": "petrol",
+            "is_turbo": False,
+            "stock_hp": 78,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/csv")
+    text = response.content.decode("utf-8")
+    assert "manual_label" in text.splitlines()[0]
+    assert "manual_risk_label" in text.splitlines()[0]
+    assert "Injection base map" in text
 
 
 def test_calibration_analyze_endpoint_rejects_missing_original_file():
