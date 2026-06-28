@@ -23,6 +23,7 @@ from app.services.calibration_ml import (
 
 
 def _binary_diff(original: bytes, modified: bytes | None) -> dict[str, Any] | None:
+    """Calculeaza diferente brute intre fisiere cand exista o calibrare modificata."""
     if modified is None:
         return None
 
@@ -76,6 +77,7 @@ def _binary_diff(original: bytes, modified: bytes | None) -> dict[str, Any] | No
 
 
 def _finding_for_map(map_result: dict[str, Any]) -> dict[str, Any] | None:
+    """Transforma o diferenta de harta intr-o constatare usor de afisat."""
     diff = map_result.get("diff")
     if not diff or diff["changed_cells"] == 0:
         return None
@@ -112,6 +114,7 @@ def _finding_for_map(map_result: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def _axis_range(axis: dict[str, Any], start_index: int, end_index: int) -> dict[str, Any] | None:
+    """Descrie intervalul de axa afectat de modificarile dintr-o harta."""
     values = axis.get("values")
     if not isinstance(values, list) or not values:
         return None
@@ -131,6 +134,7 @@ def _axis_range(axis: dict[str, Any], start_index: int, end_index: int) -> dict[
 
 
 def _affected_zone(map_result: dict[str, Any]) -> list[dict[str, Any]]:
+    """Leaga celulele modificate de zone aproximative de RPM si sarcina."""
     diff = map_result.get("diff") or {}
     bounds = diff.get("changed_bounds") or {}
     axes = map_result.get("axes") or []
@@ -166,6 +170,7 @@ def _affected_zone(map_result: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _zone_text(zones: list[dict[str, Any]]) -> str:
+    """Formateaza zonele afectate intr-un text scurt pentru recomandari."""
     parts: list[str] = []
     for zone in zones[:3]:
         label = zone.get("label") or "axis"
@@ -178,6 +183,7 @@ def _zone_text(zones: list[dict[str, Any]]) -> str:
 
 
 def _unique_preserve_order(values: list[str], limit: int) -> list[str]:
+    """Elimina duplicatele fara sa piarda ordinea observatiilor."""
     seen: set[str] = set()
     unique: list[str] = []
     for value in values:
@@ -196,6 +202,7 @@ def _build_tuner_summary(
     changed_maps: list[dict[str, Any]],
     binary_diff: dict[str, Any] | None,
 ) -> list[str]:
+    """Construieste rezumatul tehnic citit rapid de utilizator dupa analiza."""
     summary: list[str] = []
     changed_categories = _unique_preserve_order(
         [
@@ -274,6 +281,7 @@ def _build_analysis_verdict(
     has_modified: bool,
     definitions_count: int,
 ) -> dict[str, Any]:
+    """Stabileste verdictul general al analizei si mesajul de risc pentru UI."""
     high_risk_recommendations = [
         item for item in recommendations
         if str(item.get("risk") or "").lower() in {"high", "medium-high"}
@@ -362,6 +370,7 @@ def _build_calibration_report(
     warnings: list[str],
     verdict: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    """Agrega toate rezultatele intr-un dictionar comun pentru API, PDF si frontend."""
     changed_sorted = sorted(
         changed_maps,
         key=lambda item: (item.get("diff") or {}).get("changed_percent", 0),
@@ -444,6 +453,7 @@ def analyze_calibration(
     is_turbo: bool | None = None,
     stock_hp: float | None = None,
 ) -> dict[str, Any]:
+    """Functia publica a serviciului: analizeaza fisierele ECU si intoarce raportul complet."""
     warnings = list(warnings or [])
     warnings.extend(original.warnings)
     if modified is not None:

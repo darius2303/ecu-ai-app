@@ -23,6 +23,7 @@ STRONG_CONFIDENCE = 0.7
 
 @lru_cache(maxsize=1)
 def _load_model_bundle(model_path: str) -> dict[str, Any]:
+    """Incarca modelul ML o singura data, pentru a evita citiri repetate de pe disc."""
     path = Path(model_path)
     if not path.exists():
         raise FileNotFoundError(f"Calibration ML model not found: {path}")
@@ -35,6 +36,7 @@ def _load_model_bundle(model_path: str) -> dict[str, Any]:
 
 
 def _features_frame(rows: list[dict[str, Any]], bundle: dict[str, Any]) -> pd.DataFrame:
+    """Construieste tabelul de feature-uri in aceeasi ordine ca la antrenarea modelului."""
     features = bundle["numeric_features"] + bundle["categorical_features"]
     return pd.DataFrame(
         [{feature: row.get(feature) for feature in features} for row in rows],
@@ -43,6 +45,7 @@ def _features_frame(rows: list[dict[str, Any]], bundle: dict[str, Any]) -> pd.Da
 
 
 def _predict(bundle: dict[str, Any], rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Ruleaza predictia pentru label sau risc si ataseaza increderea modelului."""
     if not rows:
         return []
 
@@ -79,6 +82,7 @@ def _map_prediction(item: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def _recommendation_ml_summary(category_maps: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Rezuma predictiile ML pentru toate hartile care apartin unei recomandari."""
     label_counts: Counter[str] = Counter()
     risk_counts: Counter[str] = Counter()
     flagged_maps: list[str] = []
@@ -155,6 +159,7 @@ def enrich_recommendations_with_ml_evidence(
     recommendations: list[dict[str, Any]],
     map_results: list[dict[str, Any]],
 ) -> None:
+    """Adauga evidenta ML peste recomandarile deterministe, fara sa le inlocuiasca."""
     maps_by_category: dict[str, list[dict[str, Any]]] = {}
     for item in map_results:
         category = str(item.get("category") or "unknown")
@@ -196,6 +201,7 @@ def enrich_maps_with_ml_predictions(
     map_results: list[dict[str, Any]],
     ml_dataset: dict[str, Any],
 ) -> dict[str, Any]:
+    """Ataseaza predictiile ML la fiecare harta si intoarce un rezumat global."""
     rows = [
         row for row in (ml_dataset.get("rows") or [])
         if isinstance(row, dict)

@@ -201,10 +201,12 @@ CATEGORY_RULES: dict[str, dict[str, Any]] = {
 
 
 def _category(item: dict[str, Any]) -> str:
+    """Returneaza categoria tehnica a hartii sau unknown."""
     return str(item.get("category") or "unknown")
 
 
 def _unique_strings(values: list[str], limit: int | None = None) -> list[str]:
+    """Pastreaza valori unice in ordinea in care apar."""
     seen: set[str] = set()
     unique: list[str] = []
     for value in values:
@@ -219,6 +221,7 @@ def _unique_strings(values: list[str], limit: int | None = None) -> list[str]:
 
 
 def _map_names_by_category(map_results: list[dict[str, Any]]) -> dict[str, list[str]]:
+    """Grupeaza numele hartilor dupa categorie pentru verificarea dependentelor."""
     grouped: dict[str, list[str]] = {}
     for item in map_results:
         category = _category(item)
@@ -233,10 +236,12 @@ def _maps_for_category(
     map_results: list[dict[str, Any]],
     category: str,
 ) -> list[dict[str, Any]]:
+    """Filtreaza hartile care apartin unei categorii."""
     return [item for item in map_results if _category(item) == category]
 
 
 def _changed_percent(item: dict[str, Any]) -> float:
+    """Citeste procentul de celule modificate pentru o harta."""
     diff = item.get("diff") or {}
     return float(diff.get("changed_percent") or 0.0)
 
@@ -252,6 +257,7 @@ def _direction(item: dict[str, Any]) -> str:
 
 
 def _zone_text(item: dict[str, Any]) -> str:
+    """Formateaza zona afectata a unei harti pentru textul recomandarii."""
     zones = item.get("affected_zone") or []
     if not isinstance(zones, list):
         return ""
@@ -269,6 +275,7 @@ def _zone_text(item: dict[str, Any]) -> str:
 
 
 def _dominant_zone(category_maps: list[dict[str, Any]]) -> str:
+    """Alege zona cea mai relevanta din categoria analizata."""
     changed = sorted(category_maps, key=_changed_percent, reverse=True)
     for item in changed:
         zone = _zone_text(item)
@@ -278,6 +285,7 @@ def _dominant_zone(category_maps: list[dict[str, Any]]) -> str:
 
 
 def _changed_maps(category_maps: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Returneaza doar hartile care chiar s-au schimbat."""
     return [item for item in category_maps if _changed_percent(item) > 0.0]
 
 
@@ -286,6 +294,7 @@ def _missing_dependencies(
     grouped: dict[str, list[str]],
     is_turbo: bool | None,
 ) -> list[str]:
+    """Identifica hartile suport care lipsesc din map pack."""
     rule = CATEGORY_RULES.get(category, {})
     missing: list[str] = []
     for dependency in rule.get("dependencies") or []:
@@ -302,6 +311,7 @@ def _unchanged_dependencies(
     changed_categories: set[str],
     is_turbo: bool | None,
 ) -> list[str]:
+    """Identifica hartile suport prezente, dar nemodificate."""
     rule = CATEGORY_RULES.get(category, {})
     unchanged: list[str] = []
     for dependency in rule.get("dependencies") or []:
@@ -319,6 +329,7 @@ def _confidence(
     changed: bool,
     is_turbo: bool | None,
 ) -> str:
+    """Acorda increderea recomandarii in functie de contextul disponibil."""
     missing = _missing_dependencies(category, grouped, is_turbo)
     if missing:
         return "low"
@@ -337,6 +348,7 @@ def _risk(
     max_delta: float,
     is_turbo: bool | None,
 ) -> str:
+    """Stabileste nivelul de risc tehnic pentru categoria analizata."""
     base = str(CATEGORY_RULES.get(category, {}).get("base_risk") or "medium")
     missing = _missing_dependencies(category, grouped, is_turbo)
     if category in {"timing", "rail_pressure"}:
@@ -357,6 +369,7 @@ def _priority_score(
     changed: bool,
     missing_dependencies: list[str],
 ) -> int:
+    """Calculeaza prioritatea folosita pentru ordonarea recomandarilor."""
     score = 0
     if changed:
         score += 40
@@ -372,6 +385,7 @@ def _priority_score(
 
 
 def _mode_label(has_modified: bool, changed: bool) -> tuple[str, str]:
+    """Alege modul recomandarii: planificare, review sau harta suport."""
     if not has_modified:
         return "suggest_next_change", "Original-only planning"
     if changed:
@@ -389,6 +403,7 @@ def _observation_lines(
     max_delta: float,
     unchanged_dependencies: list[str],
 ) -> list[str]:
+    """Construieste observatiile scurte care explica recomandarea."""
     observations = [
         f"Found {len(category_maps)} maps in the {category} category.",
     ]
@@ -426,6 +441,7 @@ def _reason(
     missing_dependencies: list[str],
     unchanged_dependencies: list[str],
 ) -> str:
+    """Construieste motivatia principala a recomandarii."""
     if not has_modified:
         reason = (
             f"{title} is a candidate tuning area, but without a tuned file "
@@ -453,6 +469,7 @@ def _context_note(
     fuel_type: str | None,
     is_turbo: bool | None,
 ) -> str:
+    """Adauga note speciale in functie de combustibil si tipul de motor."""
     fuel = (fuel_type or "").lower()
     if category == "boost" and is_turbo is False:
         return "The engine is marked naturally aspirated, so boost is not treated as a primary dependency."
@@ -462,6 +479,7 @@ def _context_note(
 
 
 def _title_for_context(category: str, fuel_type: str | None) -> str:
+    """Ajusteaza titlul pentru cazuri unde aceeasi categorie are interpretari diferite."""
     title = str(CATEGORY_RULES[category]["title"])
     if category == "air_fuel" and (fuel_type or "").lower() == "petrol":
         return "Airflow / lambda / AFR model"
@@ -477,6 +495,7 @@ def _recommendation_for_category(
     fuel_type: str | None,
     is_turbo: bool | None,
 ) -> dict[str, Any]:
+    """Construieste recomandarea completa pentru o categorie de harti."""
     rule = CATEGORY_RULES[category]
     changed = _changed_maps(category_maps)
     changed_or_planning = bool(changed) or not has_modified
@@ -560,6 +579,7 @@ def _supporting_recommendations(
     fuel_type: str | None,
     is_turbo: bool | None,
 ) -> list[dict[str, Any]]:
+    """Adauga recomandari pentru harti suport care pot limita o modificare."""
     recommendations: list[dict[str, Any]] = []
     triggers = {
         "fuel": ["air_fuel", "boost"],
@@ -600,6 +620,7 @@ def generate_power_recommendations(
     fuel_type: str | None = None,
     is_turbo: bool | None = None,
 ) -> list[dict[str, Any]]:
+    """Genereaza recomandarile tehnice finale pentru hartile de putere."""
     grouped = _map_names_by_category(map_results)
     changed_categories = {
         _category(item)

@@ -2,20 +2,14 @@ from pydantic import BaseModel
 from typing import Optional, Literal
 
 
-class MapFileInput(BaseModel):
-    file_name: str
-    content_base64: str
-    map_type: Literal["soi", "fuel", "boost", "torque"] = "soi"
-    fuel_type: Literal["diesel", "petrol"]
-    is_turbo: bool
-
-
 class CalibrationUploadedFile(BaseModel):
+    """Reprezinta un fisier trimis prin API, codificat Base64 de catre frontend."""
     file_name: str
     content_base64: str
 
 
 class CalibrationAnalyzeInput(BaseModel):
+    """Modelul cererii comune pentru analiza, raport PDF si exporturi ML."""
     original_file: CalibrationUploadedFile
     modified_file: Optional[CalibrationUploadedFile] = None
     definitions_file: Optional[CalibrationUploadedFile] = None

@@ -34,10 +34,12 @@ INTEGER_COLUMNS = {"changed_cells"}
 
 
 def _truthy(value: str | None) -> bool:
+    """Interpreteaza valorile text folosite pentru include_for_training."""
     return str(value or "").strip().lower() in {"1", "true", "yes", "y"}
 
 
 def _load_rows(path: Path) -> list[dict[str, str]]:
+    """Incarca datasetul de baza din CSV."""
     if not path.exists():
         raise FileNotFoundError(f"Training dataset not found: {path}")
     with path.open("r", newline="", encoding="utf-8-sig") as handle:
@@ -45,6 +47,7 @@ def _load_rows(path: Path) -> list[dict[str, str]]:
 
 
 def _training_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
+    """Filtreaza doar randurile reale care au fost aprobate pentru training."""
     return [
         row
         for row in rows
@@ -55,6 +58,7 @@ def _training_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
 
 
 def _float_value(value: Any) -> float | None:
+    """Converteste sigur o valoare din CSV in float, daca este posibil."""
     text = str(value or "").strip()
     if not text:
         return None
@@ -71,6 +75,7 @@ def _format_number(value: float, template: str) -> str:
 
 
 def _jitter_numeric(value: str, config: dict[str, float | None], rng: random.Random) -> str:
+    """Aplica o variatie mica pe campurile numerice pentru augmentare."""
     parsed = _float_value(value)
     if parsed is None:
         return value
@@ -90,6 +95,7 @@ def _jitter_numeric(value: str, config: dict[str, float | None], rng: random.Ran
 
 
 def _jitter_integer(value: str, row: dict[str, str], rng: random.Random) -> str:
+    """Modifica discret numere intregi, fara sa depaseasca numarul de celule."""
     parsed = _float_value(value)
     if parsed is None:
         return value
@@ -103,6 +109,7 @@ def _jitter_integer(value: str, row: dict[str, str], rng: random.Random) -> str:
 
 
 def _augment_row(row: dict[str, str], index: int, rng: random.Random) -> dict[str, str]:
+    """Creeaza un rand sintetic pornind de la un rand real revizuit."""
     augmented = dict(row)
     source_sample_id = row.get("sample_id") or f"row-{index}"
     augmented["sample_id"] = f"{source_sample_id}::aug{index:04d}"
@@ -122,6 +129,7 @@ def _augment_row(row: dict[str, str], index: int, rng: random.Random) -> dict[st
 
 
 def _fieldnames(rows: list[dict[str, str]]) -> list[str]:
+    """Ordineaza coloanele astfel incat metadatele augmentarii sa fie usor de verificat."""
     preferred = [
         "source_csv",
         "sample_id",
@@ -156,6 +164,7 @@ def augment_training_dataset(
     target_per_label: int = 100,
     seed: int = 42,
 ) -> dict[str, Any]:
+    """Genereaza un dataset mai mare si mai echilibrat pentru antrenarea ML."""
     rows = _training_rows(_load_rows(input_path))
     if not rows:
         raise ValueError("No reviewed training rows found.")
@@ -221,6 +230,7 @@ def augment_training_dataset(
 
 
 def main() -> None:
+    """Entry point CLI pentru augmentarea datasetului."""
     parser = argparse.ArgumentParser(
         description="Create a label-balanced augmented calibration training dataset."
     )

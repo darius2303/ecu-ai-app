@@ -7,5 +7,7 @@ scikit-learn
 joblib
 matplotlib
 reportlab
+pillow
+pymupdf
 pytest
 httpx

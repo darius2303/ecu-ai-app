@@ -42,6 +42,7 @@ RISK_LABEL_OPTIONS = [
 
 
 def _number(value: Any) -> float | None:
+    """Normalizeaza valorile numerice pentru exportul JSON/CSV."""
     if isinstance(value, bool):
         return None
     if isinstance(value, (int, float)):
@@ -50,12 +51,14 @@ def _number(value: Any) -> float | None:
 
 
 def _summary_value(summary: dict[str, Any] | None, key: str) -> float | None:
+    """Citeste o metrica din sumarul hartii, daca exista."""
     if not isinstance(summary, dict):
         return None
     return _number(summary.get(key))
 
 
 def _axis_features(axes: list[Any]) -> dict[str, Any]:
+    """Extrage feature-uri simple din axele hartii pentru componenta ML."""
     result: dict[str, Any] = {
         "axis_count": 0,
         "axis_1_label": None,
@@ -86,6 +89,7 @@ def _axis_features(axes: list[Any]) -> dict[str, Any]:
 
 
 def _zone_features(zones: list[Any]) -> dict[str, Any]:
+    """Transforma zonele afectate in campuri numerice pentru training."""
     result: dict[str, Any] = {
         "affected_zone_count": 0,
         "affected_rpm_min": None,
@@ -112,6 +116,7 @@ def _zone_features(zones: list[Any]) -> dict[str, Any]:
 
 
 def _supporting_categories(map_results: list[dict[str, Any]]) -> set[str]:
+    """Afla ce categorii de harti exista in fisierul analizat."""
     return {
         str(item.get("category") or "unknown")
         for item in map_results
@@ -120,6 +125,7 @@ def _supporting_categories(map_results: list[dict[str, Any]]) -> set[str]:
 
 
 def _recommendation_index(recommendations: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    """Grupeaza recomandarile dupa categoria de harta."""
     grouped: dict[str, list[dict[str, Any]]] = {}
     for item in recommendations:
         if not isinstance(item, dict):
@@ -130,6 +136,7 @@ def _recommendation_index(recommendations: list[dict[str, Any]]) -> dict[str, li
 
 
 def _risk_score(value: str | None) -> float:
+    """Converteste nivelul de risc intr-un scor numeric usor de folosit de model."""
     risk = (value or "").lower()
     return {
         "low": 0.2,
@@ -141,6 +148,7 @@ def _risk_score(value: str | None) -> float:
 
 
 def _priority_score(value: str | None) -> float:
+    """Converteste prioritatea recomandarii intr-un scor numeric."""
     priority = (value or "").lower()
     return {
         "low": 0.2,
@@ -155,6 +163,7 @@ def _seed_label(
     has_modified: bool,
     recommendations: list[dict[str, Any]],
 ) -> str:
+    """Genereaza o eticheta initiala slaba, care trebuie revizuita manual."""
     if not has_modified:
         return "candidate_for_review" if category in POWER_CATEGORIES else "unknown"
     if changed_percent <= 0:
@@ -175,6 +184,7 @@ def _ml_confidence_seed(
     recommendations: list[dict[str, Any]],
     has_modified: bool,
 ) -> float:
+    """Estimeaza increderea etichetei initiale pe baza contextului disponibil."""
     score = 0.2
     if category in POWER_CATEGORIES:
         score += 0.2
@@ -195,10 +205,10 @@ def build_ml_dataset(
     is_turbo: bool | None = None,
     stock_hp: float | None = None,
 ) -> dict[str, Any]:
-    """Create feature rows suitable for future ML training.
+    """Construieste randuri de feature-uri pentru training ML.
 
-    The labels are intentionally weak seed labels. They are useful for sorting
-    and bootstrapping, but should be reviewed by a tuner before model training.
+    Etichetele generate automat sunt doar orientative. Ele ajuta la sortare,
+    dar trebuie revizuite manual inainte sa fie folosite ca date de training.
     """
 
     map_results = [
@@ -354,6 +364,7 @@ def build_ml_dataset(
 
 
 def write_ml_dataset_json(dataset: dict[str, Any], output_path: str | Path) -> str:
+    """Scrie datasetul ML intermediar intr-un fisier JSON."""
     path = Path(output_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(dataset, indent=2), encoding="utf-8")
@@ -361,6 +372,7 @@ def write_ml_dataset_json(dataset: dict[str, Any], output_path: str | Path) -> s
 
 
 def write_labeling_template_csv(dataset: dict[str, Any], output_path: str | Path) -> str:
+    """Scrie un template CSV cu coloanele necesare pentru etichetare manuala."""
     path = Path(output_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     rows = [row for row in dataset.get("rows", []) if isinstance(row, dict)]

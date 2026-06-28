@@ -20,6 +20,13 @@ Developer dataset/export tools are hidden by default in the app code.
 - Windows desktop support enabled
 - Backend API running at `http://127.0.0.1:8000`
 
+From the repository root, the easiest setup is:
+
+```powershell
+make install-frontend
+make frontend-windows
+```
+
 ## Run
 
 From `frontend`:
@@ -34,6 +41,13 @@ flutter run -d windows
 ```powershell
 dart analyze
 flutter test
+```
+
+From the repository root:
+
+```powershell
+make analyze
+make test
 ```
 
 ## Important Files

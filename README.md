@@ -6,19 +6,67 @@ The app is intended as tuner decision support: it compares an original calibrati
 
 ## Current Workflow
 
-1. Start the backend API.
-2. Start the Flutter frontend.
-3. Load:
+1. Install project dependencies.
+2. Start the backend API.
+3. Start the Flutter frontend.
+4. Load:
    - original ECU/calibration binary
    - optional tuned/current binary
    - optional WinOLS/map-pack definition file (`.kp`, `.csv`, `.json`)
-4. Run calibration analysis.
-5. Review:
+5. Run calibration analysis.
+6. Review:
    - global verdict
    - priority recommendations
    - AI-assisted review notes
    - focused map browser and 3D map previews
    - PDF report export
+
+## Quick Start From Git
+
+Requirements:
+
+- Python 3.12 recommended
+- Flutter SDK with Windows desktop support enabled
+- PowerShell
+- `make` optional, because the same commands can be run through `scripts/dev.ps1`
+
+From the repository root:
+
+```powershell
+make setup
+make app-windows
+```
+
+Without `make`, use:
+
+```powershell
+.\scripts\dev.ps1 setup
+.\scripts\dev.ps1 app-windows
+```
+
+`setup` creates a local `.venv`, installs backend dependencies from `backend/requirements.txt`, and runs `flutter pub get`. `app-windows` starts the backend in a separate PowerShell window and then opens the Flutter Windows app.
+
+If you prefer to run the two parts manually:
+
+```powershell
+make backend
+make frontend-windows
+```
+
+The frontend expects the API at:
+
+```text
+http://127.0.0.1:8000
+```
+
+Useful checks:
+
+```powershell
+make backend-test
+make analyze
+make test
+make check
+```
 
 ## Main Features
 
@@ -71,12 +119,6 @@ backend/generated/e2e/e2e_01_complete_analysis/
 
 Open `visual_evidence.html` to inspect the visual E2E summary generated from the same analysis and report workflow. Additional E2E cases cover original-only planning mode, missing map-pack context, and invalid uploaded files.
 
-The frontend expects the API at:
-
-```text
-http://127.0.0.1:8000
-```
-
 Important endpoints:
 
 - `POST /api/calibration/analyze`
@@ -102,7 +144,13 @@ flutter test
 
 ## AI/ML Notes
 
-The runtime model is a small baseline used as advisory evidence only. Rule-based recommendations remain the primary decision layer.
+The runtime model is a small baseline used as advisory evidence only. Rule-based recommendations remain the primary decision layer. The trained model artifacts are committed under:
+
+```text
+backend/ml/artifacts/calibration_labels/
+```
+
+This means the application can run AI-assisted inference after a normal dependency setup, without requiring the training CSV files.
 
 Training data is built from reviewed CSV files in:
 
@@ -110,7 +158,14 @@ Training data is built from reviewed CSV files in:
 backend/generated/labeled_datasets/
 ```
 
-Generated datasets and reports under `backend/generated/` are intentionally ignored by git. Do not commit local training datasets such as `training_dataset.csv`.
+Generated datasets and reports under `backend/generated/` are intentionally ignored by git. Do not commit local training datasets such as `training_dataset.csv`, `training_dataset_augmented.csv`, or `training_dataset_augmented_large.csv`.
+
+For a fresh clone, the expected split is:
+
+- committed: source code, tests, scripts, documentation, model artifacts, and training metrics
+- not committed: generated datasets, exported reports, local evidence packs, and local `.venv`
+
+If model retraining is needed, regenerate or provide reviewed datasets locally, then use the scripts in `backend/scripts/` and `backend/ml/`.
 
 See:
 

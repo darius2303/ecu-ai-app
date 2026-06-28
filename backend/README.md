@@ -7,6 +7,13 @@ FastAPI backend for calibration file parsing, map extraction, recommendations, A
 - Python 3.12 recommended
 - Dependencies from `requirements.txt`
 
+From the repository root, the easiest setup is:
+
+```powershell
+make install-backend
+make backend
+```
+
 Install from `backend`:
 
 ```powershell
@@ -33,6 +40,12 @@ From `backend`:
 
 ```powershell
 python -m pytest tests
+```
+
+From the repository root:
+
+```powershell
+make backend-test
 ```
 
 The backend test suite covers ECU file decoding, CSV/JSON map definition parsing, map extraction and comparison, central calibration analysis behavior, verdict generation, recommendation logic, ML fallback behavior, negative API validation, the main calibration analysis endpoint, PDF report generation, and end-to-end calibration workflows.

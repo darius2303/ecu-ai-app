@@ -2,9 +2,11 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 
+/// Clientul HTTP folosit de interfata pentru comunicarea cu backend-ul local.
 class ApiService {
   static const String baseUrl = 'http://127.0.0.1:8000';
 
+  /// Construieste payload-ul comun pentru analiza, raport si exporturi.
   Map<String, dynamic> _calibrationBody({
     required String originalFileName,
     required Uint8List originalBytes,
@@ -44,6 +46,7 @@ class ApiService {
     return body;
   }
 
+  /// Trimite fisierele ECU catre backend si returneaza rezultatul analizei.
   Future<Map<String, dynamic>> analyzeCalibration({
     required String originalFileName,
     required Uint8List originalBytes,
@@ -83,6 +86,7 @@ class ApiService {
     );
   }
 
+  /// Cere backend-ului sa genereze raportul PDF si intoarce bytes-ii fisierului.
   Future<Uint8List> calibrationReport({
     required String originalFileName,
     required Uint8List originalBytes,
@@ -122,6 +126,7 @@ class ApiService {
     );
   }
 
+  /// Exporta datasetul JSON folosit pentru experimente si etichetare ML.
   Future<Uint8List> calibrationMlDataset({
     required String originalFileName,
     required Uint8List originalBytes,
@@ -161,6 +166,7 @@ class ApiService {
     );
   }
 
+  /// Exporta template-ul CSV care poate fi completat manual pentru training.
   Future<Uint8List> calibrationLabelingTemplate({
     required String originalFileName,
     required Uint8List originalBytes,

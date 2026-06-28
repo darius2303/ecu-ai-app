@@ -6,6 +6,7 @@ from pathlib import Path
 
 @dataclass
 class EcuBinary:
+    """Container simplu pentru fisierul ECU dupa normalizarea formatului."""
     file_name: str
     content: bytes
     file_format: str
@@ -13,6 +14,7 @@ class EcuBinary:
 
 
 def _parse_intel_hex(raw_text: str) -> bytes:
+    """Transforma un fisier Intel HEX in octeti liniari pentru analiza hartilor."""
     memory: dict[int, int] = {}
     upper_address = 0
 
@@ -51,6 +53,7 @@ def _parse_intel_hex(raw_text: str) -> bytes:
 
 
 def _parse_motorola_srec(raw_text: str) -> bytes:
+    """Transforma un fisier Motorola S-record in continut binar continuu."""
     memory: dict[int, int] = {}
     address_lengths = {"1": 2, "2": 3, "3": 4}
 
@@ -85,6 +88,7 @@ def _parse_motorola_srec(raw_text: str) -> bytes:
 
 
 def read_ecu_binary(file_name: str, raw_bytes: bytes) -> EcuBinary:
+    """Detecteaza formatul fisierului ECU si il aduce la reprezentarea binara comuna."""
     if not raw_bytes:
         raise ValueError("The ECU file is empty.")
 

@@ -9,9 +9,11 @@ import 'package:path_provider/path_provider.dart';
 import 'services/api_service.dart';
 
 void main() {
+  // Porneste aplicatia Flutter desktop.
   runApp(const EcuAiApp());
 }
 
+/// Configureaza tema generala si ecranul principal al aplicatiei.
 class EcuAiApp extends StatelessWidget {
   const EcuAiApp({super.key});
 
@@ -72,6 +74,7 @@ class EcuAiApp extends StatelessWidget {
   }
 }
 
+/// Ecranul principal: gestioneaza fisierele, analiza si rezultatele afisate.
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -120,12 +123,14 @@ class _HomePageState extends State<HomePage> {
   String? highlightedRecommendationCategory;
   int mobileTabIndex = 0;
 
+  /// Parseaza valorile numerice introduse de utilizator, acceptand si virgula.
   double? parseNumber(String value) {
     final normalized = value.trim().replaceAll(',', '.');
     if (normalized.isEmpty) return null;
     return double.tryParse(normalized);
   }
 
+  /// Converteste sigur un obiect primit din JSON intr-un Map cu chei string.
   Map<String, dynamic>? asStringMap(dynamic value) {
     if (value is Map) {
       return Map<String, dynamic>.from(value);
@@ -133,6 +138,7 @@ class _HomePageState extends State<HomePage> {
     return null;
   }
 
+  /// Deschide dialogul de selectie si intoarce numele plus bytes-ii fisierului.
   Future<({String name, Uint8List bytes})?> pickCalibrationFile([
     List<String>? extensions,
   ]) async {
@@ -156,6 +162,7 @@ class _HomePageState extends State<HomePage> {
     return (name: file.name, bytes: bytes);
   }
 
+  /// Selecteaza fisierul ECU original, obligatoriu pentru orice analiza.
   Future<void> selectCalibrationOriginal() async {
     try {
       final file = await pickCalibrationFile();
@@ -173,6 +180,7 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  /// Selecteaza fisierul ECU modificat, folosit pentru comparatia cu originalul.
   Future<void> selectCalibrationModified() async {
     try {
       final file = await pickCalibrationFile();
@@ -190,6 +198,7 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  /// Selecteaza map pack-ul sau fisierul de definitii pentru harti.
   Future<void> selectCalibrationDefinitions() async {
     try {
       final file = await pickCalibrationFile(['csv', 'json', 'kp']);
@@ -207,6 +216,7 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  /// Curata rezultatele generate cand se schimba fisierele de intrare.
   void clearCalibrationOutputs() {
     calibrationResult = null;
     calibrationError = null;
@@ -221,6 +231,7 @@ class _HomePageState extends State<HomePage> {
     derivedFeatures = null;
   }
 
+  /// Trimite browserul de harti catre categoria ceruta de o recomandare.
   void focusMapsForRecommendation(Map<String, dynamic> recommendation) {
     final focus = _MapFocusRequest.fromRecommendation(recommendation);
     if (focus == null) return;
@@ -242,6 +253,7 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  /// Elimina filtrul de focus aplicat peste hartile analizate.
   void clearMapFocus() {
     setState(() {
       mapFocusRequest = null;
@@ -251,6 +263,7 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  /// Deruleaza interfata catre recomandarea asociata unei harti.
   void showRecommendationFromMap(Map<String, dynamic> recommendation) {
     setState(() {
       highlightedRecommendationCategory = recommendation['category']
@@ -269,6 +282,7 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  /// Sterge fisierul original si invalideaza rezultatele existente.
   void removeCalibrationOriginal() {
     setState(() {
       originalCalibrationFileName = null;
@@ -277,6 +291,7 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  /// Sterge fisierul modificat si invalideaza comparatia.
   void removeCalibrationModified() {
     setState(() {
       modifiedCalibrationFileName = null;
@@ -285,6 +300,7 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  /// Sterge map pack-ul si invalideaza rezultatele bazate pe definitii.
   void removeCalibrationDefinitions() {
     setState(() {
       definitionsCalibrationFileName = null;
@@ -293,6 +309,7 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  /// Ruleaza analiza principala si salveaza rezultatul JSON in starea ecranului.
   Future<void> analyzeCalibrationFiles() async {
     FocusScope.of(context).unfocus();
 
@@ -358,6 +375,7 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  /// Cere raportul PDF de la backend si il salveaza in Documents.
   Future<void> generatePdfReport() async {
     FocusScope.of(context).unfocus();
 
@@ -420,6 +438,7 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  /// Exporta datasetul JSON produs din analiza curenta.
   Future<void> exportMlDataset() async {
     FocusScope.of(context).unfocus();
 
@@ -483,6 +502,7 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  /// Exporta fisierul CSV care poate fi completat manual pentru etichetare.
   Future<void> exportLabelingTemplate() async {
     FocusScope.of(context).unfocus();
 
@@ -546,6 +566,7 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  /// Elibereaza controllerele folosite de campurile numerice.
   @override
   void dispose() {
     displacementController.dispose();
@@ -553,6 +574,7 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
+  /// Construieste un camp numeric reutilizat pentru datele motorului.
   Widget buildTextField(
     String label,
     TextEditingController controller, {
@@ -570,10 +592,12 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  /// Normalizeaza valori dinamice venite din JSON la lista.
   List<dynamic> asList(dynamic value) {
     return value is List ? value : const [];
   }
 
+  /// Formateaza dimensiunea fisierelor pentru afisare in interfata.
   String formatFileSize(int? bytes) {
     if (bytes == null) return '-';
     if (bytes >= 1024 * 1024) {
@@ -585,6 +609,7 @@ class _HomePageState extends State<HomePage> {
     return '$bytes B';
   }
 
+  /// Construieste butonul de incarcare pentru fisierele ECU si map pack.
   Widget buildCalibrationFileButton({
     required String label,
     required String? fileName,
@@ -604,6 +629,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  /// Construieste panoul de input cu fisiere si date despre motor.
   Widget buildInputForm(bool busy) {
     final engineFields = [
       buildTextField(
@@ -790,6 +816,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  /// Construieste panoul principal de rezultate dupa analiza.
   Widget buildResultCard() {
     final summary = asStringMap(calibrationResult?['summary']);
     final binaryDiff = asStringMap(calibrationResult?['binary_diff']);
@@ -1019,6 +1046,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  /// Construieste un buton de export cu stare de loading.
   Widget buildActionButton({
     required String label,
     required IconData icon,
@@ -1039,6 +1067,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  /// Construieste panoul cu exporturile disponibile pentru analiza curenta.
   Widget buildActions() {
     final hasMlDataset = calibrationResult?['ml_dataset'] != null;
     return _SectionPanel(
@@ -1078,6 +1107,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  /// Afiseaza pe mobil un rezumat scurt al analizei.
   Widget buildMobileStatusStrip() {
     final diff = asStringMap(calibrationResult?['binary_diff']);
     final summary = asStringMap(calibrationResult?['summary']);
@@ -1114,6 +1144,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  /// Alege continutul tabului curent in layout-ul de mobil.
   Widget buildMobileTabContent(bool busy) {
     switch (mobileTabIndex) {
       case 1:
@@ -1125,6 +1156,7 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  /// Construieste layout-ul adaptat pentru ecrane inguste.
   Widget buildMobileScaffold(bool busy) {
     return Scaffold(
       body: CustomScrollView(
@@ -1338,6 +1370,7 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
+/// Banda de introducere care prezinta scopul aplicatiei in ecranul desktop.
 class _IntroBand extends StatelessWidget {
   const _IntroBand();
 
@@ -1369,7 +1402,7 @@ class _IntroBand extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'ECU Calibration Analyzer',
+                  'Upload and analyze ECU calibration files',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.w800,
                     color: const Color(0xFF0F172A),
@@ -1386,16 +1419,13 @@ class _IntroBand extends StatelessWidget {
               ],
             ),
           ),
-          const _StatusPill(
-            icon: Icons.api_rounded,
-            label: 'Local API: 127.0.0.1:8000',
-          ),
         ],
       ),
     );
   }
 }
 
+/// Componenta mica pentru mesaje informative sau avertismente.
 class _InlineNotice extends StatelessWidget {
   final IconData icon;
   final String text;
@@ -1434,6 +1464,7 @@ class _InlineNotice extends StatelessWidget {
   }
 }
 
+/// Cardul care afiseaza verdictul general al analizei.
 class _AnalysisVerdictCard extends StatelessWidget {
   final Map<String, dynamic> verdict;
 
@@ -1534,6 +1565,7 @@ class _AnalysisVerdictCard extends StatelessWidget {
   }
 }
 
+/// Card compact pentru metrice rapide, precum numar de harti sau dimensiune.
 class _CompactMetric extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -1592,6 +1624,7 @@ class _CompactMetric extends StatelessWidget {
   }
 }
 
+/// Model intern folosit pentru a focaliza browserul pe hartile unei recomandari.
 class _MapFocusRequest {
   final String category;
   final Set<String> mapNames;
@@ -1603,6 +1636,7 @@ class _MapFocusRequest {
     required this.title,
   });
 
+  /// Creeaza o cerere de focus pornind de la o recomandare selectata.
   static _MapFocusRequest? fromRecommendation(Map<String, dynamic> item) {
     final category = item['category']?.toString();
     if (category == null || category.isEmpty || category == 'definitions') {
@@ -1635,6 +1669,7 @@ class _MapFocusRequest {
     );
   }
 
+  /// Verifica daca o harta se potriveste cu focusul curent.
   bool matches(Map<String, dynamic> item) {
     final itemCategory = item['category']?.toString() ?? 'unknown';
     if (itemCategory != category) return false;
@@ -1645,6 +1680,7 @@ class _MapFocusRequest {
   }
 }
 
+/// Panoul care listeaza recomandarile tehnice generate de backend.
 class _RecommendationPanel extends StatelessWidget {
   final List<dynamic> items;
   final String? highlightedCategory;
@@ -1708,6 +1744,7 @@ class _RecommendationPanel extends StatelessWidget {
   }
 }
 
+/// Card individual pentru o recomandare de calibrare.
 class _RecommendationTile extends StatelessWidget {
   final Map<String, dynamic> item;
   final bool highlighted;
@@ -1863,6 +1900,7 @@ class _RecommendationTile extends StatelessWidget {
   }
 }
 
+/// Afiseaza detaliile extinse ale unei recomandari.
 class _RecommendationDetails extends StatelessWidget {
   final List<dynamic> observations;
   final List<dynamic> benefits;
@@ -1972,6 +2010,7 @@ class _RecommendationDetails extends StatelessWidget {
   }
 }
 
+/// Rezuma evidenta ML atasata unei recomandari.
 class _MlEvidenceBox extends StatelessWidget {
   final Map<String, dynamic> evidence;
 
@@ -2077,6 +2116,7 @@ String _friendlyAiSeverity(dynamic value) {
   }
 }
 
+/// Sectiune reutilizabila pentru listele din interiorul recomandarilor.
 class _RecommendationSection extends StatelessWidget {
   final String title;
   final IconData icon;
@@ -2127,6 +2167,7 @@ class _RecommendationSection extends StatelessWidget {
   }
 }
 
+/// Lista cu bullets aliniate pentru beneficii, riscuri si actiuni.
 class _AlignedBulletList extends StatelessWidget {
   final List<dynamic> items;
   final Color color;
@@ -2181,6 +2222,7 @@ class _AlignedBulletList extends StatelessWidget {
   }
 }
 
+/// Panoul care afiseaza sumarul raportului tehnic generat de backend.
 class _CalibrationReportPanel extends StatelessWidget {
   final Map<String, dynamic> report;
 
@@ -2299,6 +2341,7 @@ class _CalibrationReportPanel extends StatelessWidget {
   }
 }
 
+/// Panou de dezvoltare pentru verificarea datasetului ML extras din analiza.
 class _MlDatasetPanel extends StatelessWidget {
   final Map<String, dynamic> dataset;
 
@@ -2423,6 +2466,7 @@ class _MlDatasetPanel extends StatelessWidget {
   }
 }
 
+/// Rand din lista de modificari importante incluse in raport.
 class _ReportChangeRow extends StatelessWidget {
   final Map<String, dynamic> change;
 
@@ -2484,6 +2528,7 @@ class _ReportChangeRow extends StatelessWidget {
   }
 }
 
+/// Browserul de harti, cu filtre, sortare si preview numeric/vizual.
 class _MapBrowser extends StatefulWidget {
   final List<dynamic> items;
   final List<dynamic> recommendations;
@@ -2504,6 +2549,7 @@ class _MapBrowser extends StatefulWidget {
   State<_MapBrowser> createState() => _MapBrowserState();
 }
 
+/// Starea browserului de harti, inclusiv cautare, focus si filtre.
 class _MapBrowserState extends State<_MapBrowser> {
   final searchController = TextEditingController();
   final expansionController = ExpansibleController();
@@ -2532,6 +2578,7 @@ class _MapBrowserState extends State<_MapBrowser> {
     }
   }
 
+  /// Aplica focusul pe o categorie si deschide browserul de harti.
   void applyFocus(_MapFocusRequest focus) {
     setState(() {
       activeFocus = focus;
@@ -2543,6 +2590,7 @@ class _MapBrowserState extends State<_MapBrowser> {
     expansionController.expand();
   }
 
+  /// Revine la lista normala de harti, fara focus activ.
   void clearFocus() {
     setState(() {
       activeFocus = null;
@@ -2558,12 +2606,14 @@ class _MapBrowserState extends State<_MapBrowser> {
     super.dispose();
   }
 
+  /// Converteste lista dinamica primita din API in harti tipizate pentru UI.
   List<Map<String, dynamic>> get allMaps {
     return widget.items
         .map((item) => Map<String, dynamic>.from(item as Map))
         .toList();
   }
 
+  /// Verifica daca analiza contine cel putin o harta modificata.
   bool _hasChangedItems(List<dynamic> items) {
     return items.any((item) {
       if (item is! Map) return false;
@@ -2572,6 +2622,7 @@ class _MapBrowserState extends State<_MapBrowser> {
     });
   }
 
+  /// Converteste recomandarile primite din API in obiecte map tipizate.
   List<Map<String, dynamic>> get allRecommendations {
     return widget.recommendations
         .whereType<Map>()
@@ -2579,6 +2630,7 @@ class _MapBrowserState extends State<_MapBrowser> {
         .toList();
   }
 
+  /// Cauta recomandarea care corespunde hartii afisate.
   Map<String, dynamic>? relatedRecommendation(Map<String, dynamic> item) {
     final category = item['category']?.toString();
     final name = item['name']?.toString() ?? '';
@@ -2614,11 +2666,13 @@ class _MapBrowserState extends State<_MapBrowser> {
     return categoryMatch;
   }
 
+  /// Returneaza numarul de celule modificate pentru sortare si filtrare.
   int changedCells(Map<String, dynamic> item) {
     final diff = Map<String, dynamic>.from((item['diff'] as Map?) ?? {});
     return ((diff['changed_cells'] as num?) ?? 0).toInt();
   }
 
+  /// Colecteaza categoriile disponibile in rezultatul de analiza.
   List<String> get categories {
     final values = allMaps
         .map((item) => item['category']?.toString() ?? 'unknown')
@@ -2628,6 +2682,7 @@ class _MapBrowserState extends State<_MapBrowser> {
     return values;
   }
 
+  /// Aplica filtrul text peste nume, categorie, adresa si tip de date.
   bool matchesSearch(Map<String, dynamic> item, String query) {
     if (query.isEmpty) return true;
     final haystack = [
@@ -2640,6 +2695,7 @@ class _MapBrowserState extends State<_MapBrowser> {
     return haystack.contains(query);
   }
 
+  /// Aplica toate filtrele active si sorteaza hartile pentru afisare.
   List<Map<String, dynamic>> get visibleItems {
     final validCategory = categories.contains(categoryFilter)
         ? categoryFilter
@@ -2887,6 +2943,7 @@ class _MapBrowserState extends State<_MapBrowser> {
   }
 }
 
+/// Cardul unei harti individuale din browser.
 class _MapBrowserTile extends StatelessWidget {
   final Map<String, dynamic> item;
   final bool focused;
@@ -3020,6 +3077,7 @@ class _MapBrowserTile extends StatelessWidget {
   }
 }
 
+/// Leaga o harta de recomandarea relevanta, daca exista.
 class _RelatedRecommendationCard extends StatelessWidget {
   final Map<String, dynamic> recommendation;
   final VoidCallback? onPressed;
@@ -3102,6 +3160,7 @@ class _RelatedRecommendationCard extends StatelessWidget {
   }
 }
 
+/// Banda cu metrice rapide pentru o harta ECU.
 class _MapMetricStrip extends StatelessWidget {
   final Map<String, dynamic> item;
   final Map<String, dynamic> diff;
@@ -3195,6 +3254,7 @@ class _MapMetricStrip extends StatelessWidget {
   }
 }
 
+/// Grila tabelara cu valori originale, modificate si delta.
 class _MapPreviewGrid extends StatelessWidget {
   final String title;
   final dynamic rows;
@@ -3280,6 +3340,7 @@ class _MapPreviewGrid extends StatelessWidget {
   }
 }
 
+/// Celula individuala din preview-ul numeric al hartii.
 class _MapValueCell extends StatelessWidget {
   static const double cellWidth = 76;
 
@@ -3326,6 +3387,7 @@ class _MapValueCell extends StatelessWidget {
   }
 }
 
+/// Chip de status folosit in layout-ul de mobil.
 class _MobileStatChip extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -3406,6 +3468,7 @@ class _MobileStatChip extends StatelessWidget {
   }
 }
 
+/// Containerul comun pentru sectiunile principale ale interfetei.
 class _SectionPanel extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -3485,6 +3548,7 @@ class _SectionPanel extends StatelessWidget {
   }
 }
 
+/// Card pentru metrice de putere estimate.
 class _MetricTile extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -3536,6 +3600,7 @@ class _MetricTile extends StatelessWidget {
   }
 }
 
+/// Afiseaza feature-urile derivate folosite in estimarea de putere.
 class _DerivedMapSummary extends StatelessWidget {
   final Map<String, dynamic> features;
 
@@ -3594,39 +3659,7 @@ class _DerivedMapSummary extends StatelessWidget {
   }
 }
 
-class _StatusPill extends StatelessWidget {
-  final IconData icon;
-  final String label;
-
-  const _StatusPill({required this.icon, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: const Color(0xFFECFDF5),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: const Color(0xFFA7F3D0)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 18, color: const Color(0xFF047857)),
-          const SizedBox(width: 8),
-          Text(
-            label,
-            style: const TextStyle(
-              color: Color(0xFF065F46),
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
+/// Chip vizual pentru stari precum risc, prioritate sau incredere.
 class _StatusChip extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -3645,6 +3678,7 @@ class _StatusChip extends StatelessWidget {
   }
 }
 
+/// Selector vizual pentru fisierele de calibrare si map pack.
 class _CalibrationFilePicker extends StatefulWidget {
   final String label;
   final String? fileName;
@@ -3668,6 +3702,7 @@ class _CalibrationFilePicker extends StatefulWidget {
   State<_CalibrationFilePicker> createState() => _CalibrationFilePickerState();
 }
 
+/// Gestioneaza starea hover a selectorului de fisiere.
 class _CalibrationFilePickerState extends State<_CalibrationFilePicker> {
   bool hovered = false;
 
@@ -3755,6 +3790,7 @@ class _CalibrationFilePickerState extends State<_CalibrationFilePicker> {
   }
 }
 
+/// Afiseaza calea unui fisier exportat local.
 class _PathNote extends StatelessWidget {
   final String path;
 
@@ -3788,6 +3824,7 @@ class _PathNote extends StatelessWidget {
   }
 }
 
+/// Preview 3D al unei harti, desenat direct in Flutter.
 class _MapSurfacePreview extends StatelessWidget {
   final String title;
   final dynamic rows;
@@ -3799,6 +3836,7 @@ class _MapSurfacePreview extends StatelessWidget {
     this.deltaRows,
   });
 
+  /// Converteste preview-ul venit din API intr-o matrice numerica pentru desen.
   List<List<double>> _matrix(dynamic value) {
     if (value is! List) return const [];
     return value
@@ -3865,6 +3903,7 @@ class _MapSurfacePreview extends StatelessWidget {
   }
 }
 
+/// Legenda de culori pentru suprafata 3D.
 class _SurfaceLegend extends StatelessWidget {
   const _SurfaceLegend();
 
@@ -3920,12 +3959,14 @@ class _SurfaceLegend extends StatelessWidget {
   }
 }
 
+/// Painter custom care proiecteaza matricea hartii intr-o suprafata 3D.
 class _SurfacePainter extends CustomPainter {
   final List<List<double>> matrix;
   final List<List<double>> deltaMatrix;
 
   const _SurfacePainter({required this.matrix, required this.deltaMatrix});
 
+  /// Deseneaza suprafata 3D a hartii in canvasul Flutter.
   @override
   void paint(Canvas canvas, Size size) {
     final rows = matrix.length;
@@ -4080,6 +4121,7 @@ class _SurfacePainter extends CustomPainter {
   }
 }
 
+/// Componenta pentru zonele unde inca nu exista date de afisat.
 class _EmptyState extends StatelessWidget {
   final IconData icon;
   final String text;

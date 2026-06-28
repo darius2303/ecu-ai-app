@@ -11,6 +11,7 @@ def estimate_power_from_calibration(
     is_turbo: bool | None,
     stock_hp: float | None,
 ) -> dict[str, Any]:
+    """Estimeaza orientativ potentialul Stage 1 din categoriile de harti modificate."""
     missing = []
     if engine_displacement is None:
         missing.append("engine_displacement")

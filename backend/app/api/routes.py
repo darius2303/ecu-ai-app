@@ -4,16 +4,10 @@ from fastapi import APIRouter, HTTPException
 from app.models.schemas import (
     CalibrationAnalyzeInput,
     CalibrationUploadedFile,
-    MapFileInput,
 )
 from app.services.calibration_analyzer import analyze_calibration
 from app.services.file_formats import read_ecu_binary
 from app.services.map_definitions import parse_map_definitions
-from app.services.map_utils import (
-    decode_map_file_content,
-    derive_features_from_map,
-    parse_winols_map_text,
-)
 from pathlib import Path
 from fastapi.responses import FileResponse
 from app.services.report_generator import generate_calibration_report
@@ -24,6 +18,7 @@ from app.services.calibration_dataset import (
 router = APIRouter(prefix="/api")
 
 def _decode_uploaded_file(file: CalibrationUploadedFile, max_size: int) -> bytes:
+    """Decodeaza fisierul trimis de frontend si verifica limita de dimensiune."""
     try:
         raw_bytes = base64.b64decode(file.content_base64, validate=True)
     except (binascii.Error, ValueError) as exc:
@@ -34,36 +29,9 @@ def _decode_uploaded_file(file: CalibrationUploadedFile, max_size: int) -> bytes
     return raw_bytes
 
 
-@router.post("/parse-map-file")
-def parse_map_file(data: MapFileInput):
-    try:
-        raw_bytes = base64.b64decode(data.content_base64, validate=True)
-    except (binascii.Error, ValueError) as exc:
-        raise HTTPException(status_code=400, detail="The file could not be decoded.") from exc
-
-    if len(raw_bytes) > 2_000_000:
-        raise HTTPException(status_code=413, detail="The file is too large for text import.")
-
-    try:
-        raw_text = decode_map_file_content(raw_bytes)
-        calibration_map = parse_winols_map_text(raw_text, map_type=data.map_type)
-        derived_features = derive_features_from_map(
-            calibration_map=calibration_map,
-            fuel_type=data.fuel_type,
-            is_turbo=data.is_turbo,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    return {
-        "file_name": data.file_name,
-        "calibration_map": calibration_map,
-        "derived_features": derived_features,
-    }
-
-
 @router.post("/calibration/analyze")
 def calibration_analyze(data: CalibrationAnalyzeInput):
+    """Endpoint-ul principal: primeste fisierele ECU si returneaza analiza JSON."""
     try:
         return _run_calibration_analysis(data)
     except ValueError as exc:
@@ -71,6 +39,7 @@ def calibration_analyze(data: CalibrationAnalyzeInput):
 
 
 def _run_calibration_analysis(data: CalibrationAnalyzeInput):
+    """Pregateste fisierele incarcate si apeleaza serviciul central de analiza."""
     original = read_ecu_binary(
         data.original_file.file_name,
         _decode_uploaded_file(data.original_file, max_size=16_000_000),
@@ -106,6 +75,7 @@ def _run_calibration_analysis(data: CalibrationAnalyzeInput):
 
 @router.post("/calibration/report")
 def calibration_report(data: CalibrationAnalyzeInput):
+    """Genereaza raportul PDF pe baza aceleiasi analize folosite in interfata."""
     try:
         analysis = _run_calibration_analysis(data)
     except ValueError as exc:
@@ -124,6 +94,7 @@ def calibration_report(data: CalibrationAnalyzeInput):
 
 @router.post("/calibration/ml-dataset")
 def calibration_ml_dataset(data: CalibrationAnalyzeInput):
+    """Exporta datasetul intermediar folosit pentru etichetare si experimente ML."""
     try:
         analysis = _run_calibration_analysis(data)
     except ValueError as exc:
@@ -145,6 +116,7 @@ def calibration_ml_dataset(data: CalibrationAnalyzeInput):
 
 @router.post("/calibration/labeling-template")
 def calibration_labeling_template(data: CalibrationAnalyzeInput):
+    """Exporta un CSV usor de completat manual pentru imbunatatirea datasetului."""
     try:
         analysis = _run_calibration_analysis(data)
     except ValueError as exc:

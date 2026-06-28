@@ -37,10 +37,12 @@ RISK_LABEL_OPTIONS = [
 
 
 def _truthy(value: str | None) -> bool:
+    """Converteste valori text din CSV in bool pentru coloanele de selectie."""
     return str(value or "").strip().lower() in {"1", "true", "yes", "y"}
 
 
 def _reviewed_training_row(row: dict[str, str]) -> bool:
+    """Verifica daca un rand a fost revizuit si poate intra in training."""
     return (
         str(row.get("review_status") or "").strip().lower() == "reviewed"
         and _truthy(row.get("include_for_training"))
@@ -49,6 +51,7 @@ def _reviewed_training_row(row: dict[str, str]) -> bool:
 
 
 def _read_rows(input_dir: Path) -> tuple[list[dict[str, str]], list[dict[str, Any]]]:
+    """Citeste toate CSV-urile etichetate si pastreaza doar randurile acceptate."""
     rows: list[dict[str, str]] = []
     files: list[dict[str, Any]] = []
     for csv_path in sorted(input_dir.glob("*.csv")):
@@ -73,6 +76,7 @@ def _read_rows(input_dir: Path) -> tuple[list[dict[str, str]], list[dict[str, An
 
 
 def _fieldnames(rows: list[dict[str, str]]) -> list[str]:
+    """Pastreaza coloanele importante la inceputul fisierului rezultat."""
     preferred = [
         "source_csv",
         "sample_id",
@@ -101,6 +105,7 @@ def _fieldnames(rows: list[dict[str, str]]) -> list[str]:
 
 
 def _write_training_dataset(rows: list[dict[str, str]], output_path: Path) -> None:
+    """Scrie datasetul final intr-un CSV folosit la antrenarea modelelor."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fieldnames = _fieldnames(rows)
     with output_path.open("w", newline="", encoding="utf-8") as handle:
@@ -110,6 +115,7 @@ def _write_training_dataset(rows: list[dict[str, str]], output_path: Path) -> No
 
 
 def _counter(rows: list[dict[str, str]], key: str) -> dict[str, int]:
+    """Numara valorile unei coloane pentru raportul de calitate."""
     return dict(Counter(str(row.get(key) or "unknown") for row in rows))
 
 
@@ -143,6 +149,7 @@ def _unknown_values(rows: list[dict[str, str]], key: str, allowed: set[str]) -> 
 
 
 def _collection_targets(label_counts: dict[str, int]) -> list[dict[str, Any]]:
+    """Propune clasele pentru care ar trebui colectate mai multe exemple reale."""
     targets = []
     important_labels = [
         "bad_stage1_change",
@@ -173,6 +180,7 @@ def _build_report(
     files: list[dict[str, Any]],
     output_path: Path,
 ) -> dict[str, Any]:
+    """Construieste raportul JSON cu distributii, avertismente si tinte de colectare."""
     label_counts = _counter(rows, "manual_label")
     risk_counts = _counter(rows, "manual_risk_label")
     category_counts = _counter(rows, "map_category")
@@ -239,6 +247,7 @@ def build_training_dataset(
     output_path: Path = DEFAULT_OUTPUT_PATH,
     report_path: Path = DEFAULT_REPORT_PATH,
 ) -> dict[str, Any]:
+    """Orchestreaza citirea fisierelor etichetate, exportul CSV si raportul JSON."""
     if not input_dir.exists():
         raise FileNotFoundError(f"Input directory not found: {input_dir}")
 
@@ -251,6 +260,7 @@ def build_training_dataset(
 
 
 def main() -> None:
+    """Entry point CLI pentru rularea scriptului din terminal."""
     parser = argparse.ArgumentParser(
         description="Build a training CSV from reviewed calibration labeling files."
     )

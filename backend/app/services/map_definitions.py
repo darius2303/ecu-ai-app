@@ -17,6 +17,7 @@ from app.services.map_utils import decode_map_file_content
 
 @dataclass
 class AxisDefinition:
+    """Descrie o axa a hartii, de exemplu RPM sau sarcina motor."""
     label: str
     address: int
     count: int
@@ -28,6 +29,7 @@ class AxisDefinition:
 
 @dataclass
 class MapDefinition:
+    """Descrie pozitia si conversia unei harti ECU in fisierul binar."""
     name: str
     address: int
     rows: int
@@ -45,6 +47,7 @@ class MapDefinition:
 
 
 def _first(row: dict[str, Any], keys: list[str], default: Any = None) -> Any:
+    """Cauta aceeasi informatie sub mai multe nume posibile de coloana."""
     normalized = {str(key).strip().lower(): value for key, value in row.items()}
     for key in keys:
         value = normalized.get(key.lower())
@@ -54,6 +57,7 @@ def _first(row: dict[str, Any], keys: list[str], default: Any = None) -> Any:
 
 
 def _parse_int(value: Any, field_name: str) -> int:
+    """Parseaza numere scrise fie zecimal, fie hexazecimal cu prefix 0x."""
     if value is None or value == "":
         raise ValueError(f"Lipseste campul {field_name}.")
     text = str(value).strip()
@@ -70,6 +74,7 @@ def _parse_float(value: Any, default: float) -> float:
 
 
 def _category_from_name(name: str) -> str:
+    """Incadreaza automat o harta intr-o categorie tehnica dupa numele ei."""
     lower = name.lower()
     if any(token in lower for token in ("rpm limiter", "limiter", "speed limit", "maximum speed")):
         return "limiter"
@@ -95,6 +100,7 @@ def _category_from_name(name: str) -> str:
 
 
 def _definition_from_row(row: dict[str, Any], index: int) -> MapDefinition:
+    """Transforma un rand CSV/JSON intr-o definitie interna de harta."""
     name = str(_first(row, ["name", "map", "map_name", "id", "title"], f"Map {index}")).strip()
     address = _parse_int(
         _first(row, ["address", "addr", "start", "offset", "start_address"]),
@@ -152,6 +158,7 @@ def _is_unit_ascii(data: bytes) -> bool:
 
 
 def _read_kp_intern(raw_bytes: bytes) -> bytes | None:
+    """Extrage sectiunea interna dintr-un fisier WinOLS .kp, daca structura permite."""
     try:
         with zipfile.ZipFile(io.BytesIO(raw_bytes)) as archive:
             return archive.read("intern")
@@ -160,6 +167,7 @@ def _read_kp_intern(raw_bytes: bytes) -> bytes | None:
 
 
 def _kp_record_name(intern: bytes, start: int) -> str | None:
+    """Incearca sa citeasca numele unei harti dintr-un record WinOLS."""
     name_length = _read_u32_le(intern, start + 0x1B)
     if name_length is None or not 4 <= name_length <= 80:
         return None
@@ -181,6 +189,7 @@ def _clean_kp_text(value: str) -> str:
 
 
 def _kp_record_strings(intern: bytes, start: int, limit: int = 0x260) -> list[str]:
+    """Colecteaza fragmente text utile dintr-un record, precum unitati sau nume scurte."""
     record = intern[start:min(len(intern), start + limit)]
     values: list[str] = []
     allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 _-/().%")
@@ -223,6 +232,7 @@ def _kp_scale_block(
     dim_offset: int,
     address_offset: int,
 ) -> tuple[str | None, float, float]:
+    """Extrage unitatea, factorul si offsetul folosite pentru valorile hartii."""
     unit_length = _read_u32_le(intern, dim_offset + 0x18)
     if unit_length is None or not 1 <= unit_length <= 32:
         return None, 1.0, 0.0
@@ -257,6 +267,7 @@ def _kp_axis_blocks(
     rows: int,
     columns: int,
 ) -> list[AxisDefinition]:
+    """Cauta blocuri de axe in jurul unei harti WinOLS si le transforma in definitii."""
     candidates: list[dict[str, Any]] = []
     for block_start in range(address_offset + 4, min(start + 0x280, len(intern) - 32)):
         unit_length = _read_u32_le(intern, block_start)
@@ -418,6 +429,7 @@ def _kp_record_definition(intern: bytes, start: int, name: str) -> MapDefinition
 
 
 def _parse_winols_kp_definitions(raw_bytes: bytes) -> tuple[list[MapDefinition], list[str]]:
+    """Parseaza definitii de harti direct dintr-un map pack WinOLS .kp."""
     intern = _read_kp_intern(raw_bytes)
     if intern is None:
         return [], [
@@ -454,6 +466,7 @@ def _parse_winols_kp_definitions(raw_bytes: bytes) -> tuple[list[MapDefinition],
 
 
 def _parse_kp_metadata(raw_bytes: bytes) -> tuple[list[MapDefinition], list[str]]:
+    """Pastreaza un strat separat pentru .kp, unde pot exista si metadate auxiliare."""
     definitions, warnings = _parse_winols_kp_definitions(raw_bytes)
     strings = [
         item.decode("latin1", errors="replace")
@@ -479,6 +492,7 @@ def _parse_kp_metadata(raw_bytes: bytes) -> tuple[list[MapDefinition], list[str]
 
 
 def parse_map_definitions(file_name: str, raw_bytes: bytes) -> tuple[list[MapDefinition], list[str]]:
+    """Citeste definitii de harti din CSV, JSON sau WinOLS .kp."""
     if not raw_bytes:
         return [], ["The definitions file is empty."]
 

@@ -29,6 +29,7 @@ DATA_TYPES = {
 
 
 def bytes_needed(definition: MapDefinition) -> int:
+    """Calculeaza cati octeti sunt necesari pentru citirea unei harti definite."""
     _, size = DATA_TYPES.get(definition.data_type, DATA_TYPES["u16"])
     return definition.rows * definition.columns * size
 
@@ -42,6 +43,7 @@ def _unpack_values(
     factor: float,
     offset_value: float,
 ) -> list[float]:
+    """Citeste valori brute din binar si aplica factorul/offsetul din map pack."""
     fmt, size = DATA_TYPES.get(data_type, DATA_TYPES["u16"])
     start = address
     end = start + (count * size)
@@ -59,6 +61,7 @@ def _unpack_values(
 
 
 def _axis_score(values: list[float], unit: str | None) -> float:
+    """Acorda un scor de plauzibilitate pentru o axa extrasa automat din fisier."""
     if not values:
         return -1_000_000.0
 
@@ -117,6 +120,7 @@ def _axis_score(values: list[float], unit: str | None) -> float:
 
 
 def _extract_axis_values(content: bytes, axis: AxisDefinition) -> dict[str, Any]:
+    """Incearca mai multe interpretari pentru axa si pastreaza varianta cea mai credibila."""
     attempts: list[dict[str, Any]] = []
     for address_shift in (0, 2):
         for byte_order in ("little", "big"):
@@ -162,6 +166,7 @@ def _extract_axis_values(content: bytes, axis: AxisDefinition) -> dict[str, Any]
 
 
 def _resolve_auto_byte_order(content: bytes, definition: MapDefinition) -> str:
+    """Alege endianness-ul hartii folosind indiciile oferite de axele plauzibile."""
     if definition.byte_order != "auto":
         return definition.byte_order
 
@@ -181,6 +186,7 @@ def _resolve_auto_byte_order(content: bytes, definition: MapDefinition) -> str:
 
 
 def extract_map_values(content: bytes, definition: MapDefinition) -> list[list[float]]:
+    """Extrage matricea numerica a unei harti ECU pe baza definitiei primite."""
     fmt, size = DATA_TYPES.get(definition.data_type, DATA_TYPES["u16"])
     total = bytes_needed(definition)
     start = definition.address
@@ -205,6 +211,7 @@ def extract_map_values(content: bytes, definition: MapDefinition) -> list[list[f
 
 
 def summarize_values(values: list[list[float]]) -> dict[str, float]:
+    """Returneaza statistici de baza care sunt afisate in UI si in raport."""
     array = np.array(values, dtype=float)
     return {
         "min": round(float(np.nanmin(array)), 4),
@@ -214,10 +221,12 @@ def summarize_values(values: list[list[float]]) -> dict[str, float]:
 
 
 def preview_values(values: list[list[float]], limit: int = 8) -> list[list[float]]:
+    """Limiteaza matricea pentru preview, ca raspunsul API sa ramana usor de afisat."""
     return [row[:limit] for row in values[:limit]]
 
 
 def compare_values(original: list[list[float]], modified: list[list[float]]) -> dict[str, Any]:
+    """Compara doua versiuni ale aceleiasi harti si calculeaza delta relevanta."""
     left = np.array(original, dtype=float)
     right = np.array(modified, dtype=float)
     if left.shape != right.shape:
@@ -265,6 +274,7 @@ def delta_preview(
     modified: list[list[float]],
     limit: int = 8,
 ) -> list[list[float]]:
+    """Construieste un preview al diferentelor dintre harta originala si cea modificata."""
     left = np.array(original, dtype=float)
     right = np.array(modified, dtype=float)
     if left.shape != right.shape:
@@ -275,6 +285,7 @@ def delta_preview(
 
 
 def map_payload(definition: MapDefinition, values: list[list[float]]) -> dict[str, Any]:
+    """Impacheteaza harta intr-un dictionar trimis mai departe catre frontend."""
     payload = asdict(definition)
     payload.update(
         {
@@ -289,6 +300,7 @@ def map_payload(definition: MapDefinition, values: list[list[float]]) -> dict[st
 
 
 def axes_payload(content: bytes, definition: MapDefinition) -> list[dict[str, Any]]:
+    """Extrage axele disponibile, ignorand axele care nu pot fi citite in siguranta."""
     axes: list[dict[str, Any]] = []
     for axis in definition.axes:
         try:
@@ -299,4 +311,5 @@ def axes_payload(content: bytes, definition: MapDefinition) -> list[dict[str, An
 
 
 def finite_or_none(value: float) -> float | None:
+    """Converteste valorile NaN/Inf in None, ca JSON-ul sa ramana valid."""
     return value if math.isfinite(value) else None
