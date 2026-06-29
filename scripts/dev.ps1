@@ -15,6 +15,8 @@ param(
         "backend-test",
         "test",
         "check",
+        "docker-build",
+        "docker-run",
         "format",
         "help"
     )]
@@ -33,6 +35,7 @@ $FlutterRoot = "C:\flutter"
 $DartExe = Join-Path $FlutterRoot "bin\cache\dart-sdk\bin\dart.exe"
 $FlutterBat = Join-Path $FlutterRoot "bin\flutter.bat"
 $FlutterTool = Join-Path $FlutterRoot "packages\flutter_tools\bin\flutter_tools.dart"
+$DockerImage = "ecu-ai-backend"
 
 function Show-Help {
     Write-Host ""
@@ -52,6 +55,8 @@ function Show-Help {
     Write-Host "  .\scripts\dev.ps1 backend-test      Run backend pytest suite"
     Write-Host "  .\scripts\dev.ps1 test              Run Flutter tests"
     Write-Host "  .\scripts\dev.ps1 check             Run backend tests, Flutter analyzer and Flutter tests"
+    Write-Host "  .\scripts\dev.ps1 docker-build      Build backend Docker image"
+    Write-Host "  .\scripts\dev.ps1 docker-run        Run backend Docker container on port 8000"
     Write-Host "  .\scripts\dev.ps1 format            Format Dart files"
     Write-Host ""
 }
@@ -148,6 +153,19 @@ function Invoke-Flutter {
     }
 }
 
+function Invoke-Docker {
+    param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Args)
+
+    if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
+        throw "Docker command was not found. Install Docker Desktop or run the backend with .\scripts\dev.ps1 backend."
+    }
+
+    & docker @Args
+    if ($LASTEXITCODE -ne 0) {
+        throw "Docker command failed with exit code $LASTEXITCODE."
+    }
+}
+
 function Start-BackendWindow {
     $command = "Set-Location '$Root'; .\scripts\dev.ps1 backend"
     Start-Process powershell.exe -ArgumentList @(
@@ -219,6 +237,13 @@ switch ($Command) {
         Enter-Frontend
         Invoke-Dart analyze
         Invoke-Flutter test
+    }
+    "docker-build" {
+        Set-Location $Root
+        Invoke-Docker build -t $DockerImage $BackendDir
+    }
+    "docker-run" {
+        Invoke-Docker run --rm -p 8000:8000 $DockerImage
     }
     "format" {
         Enter-Frontend

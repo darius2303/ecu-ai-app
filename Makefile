@@ -1,7 +1,7 @@
 SHELL := powershell.exe
 .SHELLFLAGS := -NoProfile -ExecutionPolicy Bypass -Command
 
-.PHONY: help setup install-backend install-frontend backend backend-window frontend-windows frontend-chrome frontend-web app-windows app-web analyze backend-test test check format
+.PHONY: help setup install-backend install-frontend backend backend-window frontend-windows frontend-chrome frontend-web app-windows app-web analyze backend-test test check docker-build docker-run format
 
 help:
 	@Write-Host "Available commands:"
@@ -19,6 +19,8 @@ help:
 	@Write-Host "  make backend-test     Run backend pytest suite"
 	@Write-Host "  make test             Run Flutter tests"
 	@Write-Host "  make check            Run backend tests, Flutter analyzer and Flutter tests"
+	@Write-Host "  make docker-build     Build backend Docker image"
+	@Write-Host "  make docker-run       Run backend Docker container on http://127.0.0.1:8000"
 	@Write-Host "  make format           Format Flutter Dart files"
 
 setup:
@@ -62,6 +64,12 @@ test:
 
 check:
 	.\scripts\dev.ps1 check
+
+docker-build:
+	.\scripts\dev.ps1 docker-build
+
+docker-run:
+	.\scripts\dev.ps1 docker-run
 
 format:
 	.\scripts\dev.ps1 format
